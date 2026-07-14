@@ -1,0 +1,11 @@
+[   0.005] listening on 0.0.0.0:9999 (max 1 client(s), busy=stall)
+[   0.005] listening on 0.0.0.0:9998 (max 1 client(s), busy=stall)
+[   0.005] listening on 0.0.0.0:9997 (max 1 client(s), busy=stall)
+[   0.005] listening on 0.0.0.0:9996 (max 1 client(s), busy=stall)
+[   1.496] port 9999: connect ('127.0.0.1', 38178) (now 1 on port)
+[   1.988] port 9999: STALLING ('127.0.0.1', 38182) (channel full, accepted but ignored)
+[   4.512] port 9999: STALLING ('127.0.0.1', 38186) (channel full, accepted but ignored)
+[   7.035] port 9999: STALLING ('127.0.0.1', 35152) (channel full, accepted but ignored)
+[   9.558] port 9999: STALLING ('127.0.0.1', 35164) (channel full, accepted but ignored)
+[  10.006] stats: {'cmds': 33, 'refused': 0, 'stalled': 4}  active={9999: 1, 9998: 0, 9997: 0, 9996: 0}
+[  12.080] port 9999: disconnect ('127.0.0.1', 38178)

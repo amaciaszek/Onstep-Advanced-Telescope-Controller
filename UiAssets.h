@@ -1,0 +1,46 @@
+#pragma once
+#define LV_CONF_INCLUDE_SIMPLE
+#include <lvgl.h>
+
+extern const lv_img_dsc_t ui_img_icon_battery;
+extern const lv_img_dsc_t ui_img_icon_guide;
+extern const lv_img_dsc_t ui_img_icon_link;
+extern const lv_img_dsc_t ui_img_icon_park_locked;
+extern const lv_img_dsc_t ui_img_icon_park_unlocked;
+extern const lv_img_dsc_t ui_img_icon_slew;
+extern const lv_img_dsc_t ui_img_icon_temperature;
+extern const lv_img_dsc_t ui_img_icon_wifi;
+extern const lv_img_dsc_t ui_img_meridian_horizon;
+extern const lv_img_dsc_t ui_img_n_icon_battery;
+extern const lv_img_dsc_t ui_img_n_icon_guide;
+extern const lv_img_dsc_t ui_img_n_icon_guide_f;
+extern const lv_img_dsc_t ui_img_n_icon_link;
+extern const lv_img_dsc_t ui_img_n_icon_link_f;
+extern const lv_img_dsc_t ui_img_n_icon_park_locked;
+extern const lv_img_dsc_t ui_img_n_icon_park_locked_f;
+extern const lv_img_dsc_t ui_img_n_icon_park_unlocked;
+extern const lv_img_dsc_t ui_img_n_icon_park_unlocked_f;
+extern const lv_img_dsc_t ui_img_n_icon_slew;
+extern const lv_img_dsc_t ui_img_n_icon_slew_f;
+extern const lv_img_dsc_t ui_img_n_icon_temperature;
+extern const lv_img_dsc_t ui_img_n_icon_wifi;
+extern const lv_img_dsc_t ui_img_n_icon_wifi_f;
+extern const lv_img_dsc_t ui_img_n_nav_align;
+extern const lv_img_dsc_t ui_img_n_nav_align_f;
+extern const lv_img_dsc_t ui_img_n_nav_goto;
+extern const lv_img_dsc_t ui_img_n_nav_goto_f;
+extern const lv_img_dsc_t ui_img_n_nav_home;
+extern const lv_img_dsc_t ui_img_n_nav_home_f;
+extern const lv_img_dsc_t ui_img_n_nav_menu;
+extern const lv_img_dsc_t ui_img_n_nav_menu_f;
+extern const lv_img_dsc_t ui_img_n_panel_button;
+extern const lv_img_dsc_t ui_img_n_panel_metric;
+extern const lv_img_dsc_t ui_img_n_sky_radar_frame;
+extern const lv_img_dsc_t ui_img_nav_align;
+extern const lv_img_dsc_t ui_img_nav_goto;
+extern const lv_img_dsc_t ui_img_nav_home;
+extern const lv_img_dsc_t ui_img_nav_menu;
+extern const lv_img_dsc_t ui_img_panel_button;
+extern const lv_img_dsc_t ui_img_panel_long;
+extern const lv_img_dsc_t ui_img_panel_metric;
+extern const lv_img_dsc_t ui_img_sky_radar_frame;
