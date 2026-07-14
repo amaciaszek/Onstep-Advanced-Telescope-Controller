@@ -35,6 +35,7 @@ public:
     bool night() const { return night_; }
     void setWidget(int idx);         // 0..3, rebuilds the radar region
     int  widget() const { return widgetIdx_; }
+    int  screenIndex() const { return screenIdx_; }
     static const char* widgetName(int idx);
     void buttonA();                  // on SETTINGS screen: cycle widget
     void settingsMove(int delta);    // joystick up/down on SETTINGS

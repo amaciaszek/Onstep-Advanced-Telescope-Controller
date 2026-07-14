@@ -40,10 +40,12 @@ Libraries: `TFT_eSPI`, `Adafruit_seesaw`. Enable **PSRAM** in the board config.
 
 ## Controller and network setup
 
-- The gamepad is probed at address `0x50` on SDA/SCL `43/44`, then `8/9`.
+- The gamepad is probed at address `0x50` on SDA/SCL `44/43`, then `8/9`.
   Define `ONSTEP_I2C_SDA` and `ONSTEP_I2C_SCL` before including
   `InputSeesaw.h` if your wiring uses another pair. The selected pins are
   printed at boot.
+- Enclosure button 1 (BOOT/GPIO0) acts as A/change. Button 2 (GPIO14)
+  acts as START/next screen. These work even if the Seesaw is unplugged.
 - START cycles HOME, DIAGNOSTICS, and SETTINGS even when Wi-Fi or OnStep is
   offline. On SETTINGS, move the stick up/down and press A to change a value.
 - Choose **WI-FI / ONSTEP SETUP**, press A, then join the open

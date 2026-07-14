@@ -5,8 +5,8 @@
 #include <WiFi.h>
 
 struct NetworkConfig {
-    String ssid = "TerransOnStep";
-    String password = "password";
+    String ssid;
+    String password;
     IPAddress mountIp = IPAddress(192, 168, 0, 1);
     uint16_t port = 9999;
 };
@@ -15,8 +15,8 @@ class NetworkConfigPortal {
 public:
     void begin(Preferences& prefs) {
         prefs_ = &prefs;
-        config_.ssid = prefs.getString("wifi_ssid", config_.ssid);
-        config_.password = prefs.getString("wifi_pass", config_.password);
+        config_.ssid = prefs.getString("wifi_ssid", "");
+        config_.password = prefs.getString("wifi_pass", "");
         IPAddress parsed;
         if (parsed.fromString(prefs.getString("mount_ip", "192.168.0.1"))) config_.mountIp = parsed;
         config_.port = prefs.getUShort("mount_port", 9999);

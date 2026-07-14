@@ -16,11 +16,13 @@ public:
     static constexpr uint8_t JOY_X = 14, JOY_Y = 15;
 
     bool begin(uint8_t addr = 0x50) {
+        lastProbeMs_ = millis();
+        addr_ = addr;
 #ifndef ONSTEP_I2C_SDA
-#define ONSTEP_I2C_SDA 43
+#define ONSTEP_I2C_SDA 44
 #endif
 #ifndef ONSTEP_I2C_SCL
-#define ONSTEP_I2C_SCL 44
+#define ONSTEP_I2C_SCL 43
 #endif
         // The generic ESP32-S3 board definition does not always choose the
         // pins used by the wiring. Probe the two common exposed pairs.
@@ -36,6 +38,8 @@ public:
                 if (available_) break;
             }
         }
+        pinMode(0, INPUT_PULLUP);   // enclosure button 1 (BOOT) -> A/change
+        pinMode(14, INPUT_PULLUP);  // enclosure button 2 -> START/next screen
         if (!available_) return false;
         uint32_t pinMask = mask();
         ss_.pinModeBulk(pinMask, INPUT_PULLUP);
@@ -47,11 +51,15 @@ public:
     int scl() const { return scl_; }
 
     void update() override {
+        edgeLocal(Button::A, 0, 6);
+        edgeLocal(Button::Start, 14, 7);
+
         // The gamepad is optional during UI/network bring-up.  When it is not
         // connected, simply report a centered stick and no button events.
         if (!available_) {
             jx_ = 0.0f;
             jy_ = 0.0f;
+            if (millis() - lastProbeMs_ >= 5000) begin(addr_);
             return;
         }
 
@@ -102,11 +110,24 @@ private:
             }
         }
     }
+    void edgeLocal(Button b, uint8_t pin, int stateIndex) {
+        bool down = digitalRead(pin) == LOW;
+        if (down && downAt_[stateIndex] == 0) {
+            downAt_[stateIndex] = millis();
+        } else if (!down && downAt_[stateIndex] != 0) {
+            uint32_t held = millis() - downAt_[stateIndex];
+            downAt_[stateIndex] = 0;
+            ButtonEvent ev; ev.button = b; ev.longPress = held >= LONG_MS;
+            q_.push_back(ev);
+        }
+    }
 
     Adafruit_seesaw ss_;
     bool available_ = false;
     int sda_ = -1, scl_ = -1;
+    uint8_t addr_ = 0x50;
+    uint32_t lastProbeMs_ = 0;
     std::deque<ButtonEvent> q_;
-    uint32_t downAt_[6] = {0, 0, 0, 0, 0, 0};
+    uint32_t downAt_[8] = {};
     float jx_ = 0, jy_ = 0;
 };

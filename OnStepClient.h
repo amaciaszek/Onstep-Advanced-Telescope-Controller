@@ -30,10 +30,13 @@ public:
 
     bool ensureWiFi(uint32_t timeoutMs = 250) {
         if (WiFi.status() == WL_CONNECTED) return true;
+        if (ssid_.empty()) return false;
         if (lastWiFiAttemptMs_ && millis() - lastWiFiAttemptMs_ < 5000) return false;
         lastWiFiAttemptMs_ = millis();
-        Serial.printf("[wifi] connecting to '%s'...\n", ssid_.c_str());
-        WiFi.mode(WIFI_STA);
+        if (verbose_) Serial.printf("[wifi] connecting to '%s'...\n", ssid_.c_str());
+        // AP+STA also preserves the local configuration portal when active;
+        // it does not create an AP unless softAP() has been called.
+        WiFi.mode(WIFI_AP_STA);
         WiFi.begin(ssid_.c_str(), pass_.c_str());
         uint32_t start = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) delay(200);
@@ -42,7 +45,7 @@ public:
             Serial.printf("[wifi] connected, IP=%s RSSI=%d dBm (%lu ms)\n",
                           WiFi.localIP().toString().c_str(), WiFi.RSSI(),
                           (unsigned long)(millis() - start));
-        } else {
+        } else if (verbose_) {
             Serial.printf("[wifi] FAILED after %lu ms, status=%d "
                           "(0=idle 1=no-ssid 4=conn-fail 5=lost 6=disconnected)\n",
                           (unsigned long)(millis() - start), (int)WiFi.status());
@@ -181,8 +184,9 @@ private:
     void fail(FailReason r, const char* cmd, uint32_t t0) {
         lastFail_ = r; failCount_++;
         lastCallMs_ = millis() - t0;
-        Serial.printf("[tx] %-8s FAILED (%s) after %lums\n", cmd, failName(r),
-                      (unsigned long)lastCallMs_);
+        if (verbose_ || r != FAIL_WIFI)
+            Serial.printf("[tx] %-8s FAILED (%s) after %lums\n", cmd, failName(r),
+                          (unsigned long)lastCallMs_);
     }
 
     std::string ssid_;

@@ -72,7 +72,8 @@ void setup() {
   else               Serial.println("[boot] seesaw absent (optional)");
   const NetworkConfig& net = networkSetup.config();
   client.begin(net.ssid.c_str(), net.password.c_str(), net.mountIp, net.port);
-  client.ensureWiFi(500);
+  if (net.ssid.isEmpty()) { status.setEnabled(false); networkSetup.start(); }
+  else                    client.ensureWiFi(500);
   Serial.println("[boot] ready. Type 'help'.");
   lastMs = millis();
   lastCycleChangeMs = millis();
@@ -114,6 +115,26 @@ void loop() {
     float y = input.joyY();
     if (fabsf(y) < 0.35f) navLatch = false;
     else if (!navLatch) { ui.settingsMove(y > 0 ? -1 : 1); navLatch = true; }
+  }
+
+  // Manual slew on HOME only. The dominant joystick axis starts one OnStep
+  // jog command; returning to center or changing direction stops it first.
+  {
+    static SlewDir active = SlewDir::None;
+    SlewDir wanted = SlewDir::None;
+    float x = input.joyX(), y = input.joyY();
+    if (ui.screenIndex() == 0) {
+      if (fabsf(x) >= 0.35f || fabsf(y) >= 0.35f) {
+        if (fabsf(x) > fabsf(y)) wanted = x > 0 ? SlewDir::East : SlewDir::West;
+        else                     wanted = y > 0 ? SlewDir::North : SlewDir::South;
+      }
+    }
+    if (wanted != active) {
+      if (active != SlewDir::None) client.noReply(onstep::stopCmd(active));
+      active = wanted;
+      if (active != SlewDir::None) client.noReply(onstep::slewCmd(active));
+      status.setSlewing(active != SlewDir::None);
+    }
   }
 
   // Guide-burst polling: any pulse arms a 20 s window with a GU-heavy
