@@ -54,11 +54,13 @@ public:
         }
         std::string val = c_.query(list[idx_ % n]);
         store(list[idx_ % n], val);
+        // Publish partial updates too so classic OnStep's :GU# pulse flag is
+        // visible immediately instead of waiting for a whole polling cycle.
+        cached_ = onstep::toMountStatus(onstep::decode(raw_), c_.online());
         if (++idx_ >= n) {                 // completed a cycle -> publish
             idx_ = 0;
             lastCycleMs_ = millis() - cycleStartMs_;
             cycles_++;
-            cached_ = onstep::toMountStatus(onstep::decode(raw_), c_.online());
         }
     }
     MountStatus status() const override { return cached_; }

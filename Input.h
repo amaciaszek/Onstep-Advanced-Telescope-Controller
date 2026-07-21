@@ -1,7 +1,7 @@
 #pragma once
 
 // Physical buttons on the Adafruit seesaw gamepad (and the sim keyboard).
-enum class Button { A, B, X, Y, Start, Select };
+enum class Button { A, B, X, Y, Start, Select, Power };
 
 struct ButtonEvent {
     Button button;

@@ -15,14 +15,41 @@ class NetworkConfigPortal {
 public:
     void begin(Preferences& prefs) {
         prefs_ = &prefs;
-        config_.ssid = prefs.getString("wifi_ssid", "");
-        config_.password = prefs.getString("wifi_pass", "");
+        activeProfile_ = prefs.getUChar("active_prof",0);
+        if(activeProfile_>2) activeProfile_=0;
+        for(int i=0;i<3;i++){
+            profiles_[i].ssid=prefs.getString((String("p")+i+"ssid").c_str(),"");
+            profiles_[i].password=prefs.getString((String("p")+i+"pass").c_str(),"");
+        }
+        // One-time migration from the original single-profile keys.
+        if(profiles_[0].ssid.isEmpty()){
+            profiles_[0].ssid=prefs.getString("wifi_ssid","");
+            profiles_[0].password=prefs.getString("wifi_pass","");
+        }
+        config_.ssid = profiles_[activeProfile_].ssid;
+        config_.password = profiles_[activeProfile_].password;
         IPAddress parsed;
         if (parsed.fromString(prefs.getString("mount_ip", "192.168.0.1"))) config_.mountIp = parsed;
         config_.port = prefs.getUShort("mount_port", 9999);
     }
     const NetworkConfig& config() const { return config_; }
+    const NetworkConfig& profile(int i) const { return profiles_[i<0?0:i>2?2:i]; }
+    int activeProfile() const { return activeProfile_; }
     bool active() const { return active_; }
+    void saveLocal(const char* ssid,const char* password) { saveProfile(activeProfile_,ssid,password); }
+    void saveProfile(int slot,const char* ssid,const char* password) {
+        if(slot<0||slot>2) return;
+        prefs_->putString((String("p")+slot+"ssid").c_str(), ssid ? ssid : "");
+        prefs_->putString((String("p")+slot+"pass").c_str(), password ? password : "");
+        prefs_->putString("mount_ip", config_.mountIp.toString());
+        prefs_->putUShort("mount_port", config_.port);
+        prefs_->putUChar("active_prof",slot);
+        delay(150); ESP.restart();
+    }
+    void activateProfile(int slot) {
+        if(slot<0||slot>2||profiles_[slot].ssid.isEmpty()) return;
+        prefs_->putUChar("active_prof",slot); delay(150); ESP.restart();
+    }
 
     void start() {
         if (active_) return;
@@ -71,6 +98,8 @@ private:
     }
     Preferences* prefs_ = nullptr;
     NetworkConfig config_;
+    NetworkConfig profiles_[3];
+    uint8_t activeProfile_=0;
     WebServer server_{80};
     bool active_ = false;
 };

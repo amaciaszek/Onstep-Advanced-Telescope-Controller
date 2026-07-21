@@ -71,6 +71,16 @@ public:
         return ok && resp == "1";
     }
 
+    // Return a single-digit command result, or -1 on transport failure.
+    // OnStep :MS# uses 0 for success and non-zero digits for refusal codes.
+    int commandDigit(const std::string& cmd, uint32_t timeoutMs = 2500) {
+        String resp;
+        const bool ok = send(cmd.c_str(), REPLY_NUMERIC, resp, timeoutMs);
+        linked_ = ok || linked_;
+        return ok && resp.length() && resp[0] >= '0' && resp[0] <= '9'
+                   ? resp[0] - '0' : -1;
+    }
+
     // Fire-and-forget (e.g. :Me# :Qe# :RC# :Q#). Optionally read :GE# after.
     void noReply(const std::string& cmd) {
         String resp;
@@ -155,7 +165,7 @@ private:
                 if (kind == REPLY_NUMERIC) {
                     if (c == '\r' || c == '\n' || c == ' ') continue;
                     out += c;
-                    if (c == '0' || c == '1') { done(command, out, t0); return true; }
+                    if (c >= '0' && c <= '9') { done(command, out, t0); return true; }
                 } else { // REPLY_HASH
                     out += c;
                     if (c == '#') { done(command, out, t0); return true; }

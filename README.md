@@ -44,15 +44,39 @@ Libraries: `TFT_eSPI`, `Adafruit_seesaw`. Enable **PSRAM** in the board config.
   Define `ONSTEP_I2C_SDA` and `ONSTEP_I2C_SCL` before including
   `InputSeesaw.h` if your wiring uses another pair. The selected pins are
   printed at boot.
-- Enclosure button 1 (BOOT/GPIO0) acts as A/change. Button 2 (GPIO14)
-  acts as START/next screen. These work even if the Seesaw is unplugged.
-- START cycles HOME, DIAGNOSTICS, and SETTINGS even when Wi-Fi or OnStep is
-  offline. On SETTINGS, move the stick up/down and press A to change a value.
-- Choose **WI-FI / ONSTEP SETUP**, press A, then join the open
-  `OnStep-Remote-Setup` access point with a phone or laptop and open
-  `http://192.168.4.1/`. SSID, password, mount IP, and TCP port are saved in
-  ESP32 NVS and survive power-off. These few strings use only a tiny fraction
-  of flash storage.
+- Enclosure button 1 (BOOT/GPIO0) acts as A/change. A short press of button 2
+  (GPIO14) advances screens; hold it for at least 600 ms to shut the display,
+  Wi-Fi, and ESP32 down into deep sleep. Press GPIO14 again or press RESET to
+  wake/restart. Deep sleep is very low power, but only a physical battery
+  switch can provide a true zero-current disconnect.
+- START cycles HOME, SKY, CATALOG, SETTINGS, and DIAGNOSTICS even when Wi-Fi
+  or OnStep is offline. On SETTINGS, move the stick up/down and press A to
+  change a value.
+- Catalog detail uses a two-press GoTo confirmation, then sends classic
+  OnStep `:Sr`, `:Sd`, and `:MS`. GoTo is rejected while offline or parked.
+- A short SELECT opens SETTINGS directly; in SETTINGS it activates the selected
+  row. Hold SELECT for at least 600 ms for the emergency stop command.
+- Choose **WI-FI / ONSTEP SETUP** and press A to use the on-device keyboard.
+  The CASE key cycles lowercase, uppercase, and number/symbol layouts. Enter
+  the Wi-Fi name, choose NEXT, enter the password, then choose ENTER. EXIT
+  returns without changing the saved network. Credentials are stored in ESP32
+  NVS and survive power-off. The temporary `OnStep-Remote-Setup` web page is
+  still available automatically on a completely unconfigured first boot.
+- Wi-Fi setup first shows three OnStep mount profiles. Move the stick to view
+  them, press A to create/edit one, or press SELECT to activate a configured
+  profile. The password is shown while editing because this is a local
+  handheld setup screen. Most users can simply use Profile 1.
+- A quick joystick flick moves one keyboard character. Holding it for 450 ms
+  starts a controlled repeat every 150 ms.
+- BRIGHTNESS cycles through 5%, 10%, 15%, 20%, 25%, 35%, and 50%. It defaults
+  to 25%, is capped at 50%, and is saved in NVS.
+- TEMPERATURE defaults to hidden. It is the ESP32 chip temperature, not the
+  outdoor air or telescope temperature, and can be shown again from Settings.
+- PULSE GRAPH is designed for classic OnStep. Blue is signed RA-coordinate
+  change and green is signed Dec-coordinate change while `:GU#` reports an
+  active guide pulse. `RA+`, `RA-`, `DE+`, and `DE-` show the inferred motion
+  direction. It deliberately does not claim RMS guide error, because that
+  information lives in the PC guider and is not reported by classic OnStep.
 
 Add all of `shared/*.cpp/.h` and `platform_esp32/*.h` plus
 `TDisplayS3Display.cpp` to the sketch. TFT_eSPI must be configured for the board

@@ -2,7 +2,7 @@
 // Install: TFT_eSPI, LVGL 8.3.x, Adafruit seesaw (optional controller).
 //
 // Serial console @115200 (newline): type `help`. See SerialConsole.h.
-// Gamepad: START = cycle screens (HOME <-> DIAG). SELECT = emergency stop :Q#.
+// Gamepad: START = cycle screens. SELECT = settings/activate; hold = e-stop.
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -25,16 +25,50 @@ InputSeesaw input;
 SerialConsole console(client, status, input);
 SessionLogger slog(client, status);
 NetworkConfigPortal networkSetup;
+Preferences prefs;
 
 static uint32_t lastMs = 0, lastUi = 0, lastDiag = 0, lastHeartbeat = 0;
 static uint32_t lastCycleSeen = 0, lastCycleChangeMs = 0;
 
 static void nextScreenHandler() { ui.nextScreen(); }
-static void networkSetupHandler() { networkSetup.start(); }
-Preferences prefs;
+static void networkSaveHandler(int slot,const char* ssid,const char* password) {
+  networkSetup.saveProfile(slot,ssid,password);
+}
+static void profileActivateHandler(int slot) { networkSetup.activateProfile(slot); }
+static void brightnessHandler(int percent) {
+  display.setBrightness((uint8_t)percent);
+  prefs.putInt("bright",percent);
+}
+static bool gotoHandler(double raHours,double decDeg,const char* designation) {
+  if (!status.online() || status.status().parked) {
+    Serial.printf("[goto] rejected for %s: %s\n", designation,
+                  status.status().parked ? "mount parked" : "mount offline");
+    return false;
+  }
+
+  long raSec=lround(fmod(raHours+24.0,24.0)*3600.0) % 86400L;
+  const int rh=raSec/3600, rm=(raSec/60)%60, rs=raSec%60;
+  if(decDeg>90.0) decDeg=90.0;
+  if(decDeg< -90.0) decDeg=-90.0;
+  const char sign=decDeg<0?'-':'+';
+  long decSec=lround(fabs(decDeg)*3600.0);
+  if(decSec>324000L) decSec=324000L;
+  const int dd=decSec/3600, dm=(decSec/60)%60, ds=decSec%60;
+
+  char cmd[24];
+  snprintf(cmd,sizeof cmd,":Sr%02d:%02d:%02d#",rh,rm,rs);
+  if(!client.numeric(cmd)) { Serial.printf("[goto] %s RA rejected\n",designation); return false; }
+  snprintf(cmd,sizeof cmd,":Sd%c%02d*%02d:%02d#",sign,dd,dm,ds);
+  if(!client.numeric(cmd)) { Serial.printf("[goto] %s Dec rejected\n",designation); return false; }
+  const int result=client.commandDigit(":MS#",5000);
+  Serial.printf("[goto] %s RA %.5fh Dec %+.4f -> :MS result %d\n",
+                designation,raHours,decDeg,result);
+  return result==0;
+}
 static void saveUiPrefs() {
   prefs.putInt("widget", ui.widget());
   prefs.putBool("night", ui.night());
+  prefs.putBool("show_temp",ui.showTemperature());
 }
 static void nightHandler(bool on) { ui.setNight(on); saveUiPrefs(); }
 static void widgetHandler(int w) { ui.setWidget(w); saveUiPrefs(); }
@@ -56,7 +90,10 @@ void setup() {
     while (true) delay(1000);
   }
   ui.begin();
-  ui.setNetworkSetupHandler(networkSetupHandler);
+  ui.setNetworkSaveHandler(networkSaveHandler);
+  ui.setProfileActivateHandler(profileActivateHandler);
+  ui.setBrightnessHandler(brightnessHandler);
+  ui.setGotoHandler(gotoHandler);
   display.task();
   console.setScreenHandler(nextScreenHandler);
   console.setNightHandler(nightHandler);
@@ -64,7 +101,15 @@ void setup() {
   console.setLogHandler(logHandler);
   prefs.begin("onstepui", false);
   networkSetup.begin(prefs);
+  String profileNames[3],profilePasswords[3];
+  for(int i=0;i<3;i++){
+    profileNames[i]=networkSetup.profile(i).ssid;
+    profilePasswords[i]=networkSetup.profile(i).password;
+  }
+  ui.setNetworkProfiles(profileNames,profilePasswords,networkSetup.activeProfile());
   ui.setWidget(prefs.getInt("widget", 0));
+  ui.setBrightness(prefs.getInt("bright",25));
+  ui.setShowTemperature(prefs.getBool("show_temp",false));
   if (prefs.getBool("night", false)) ui.setNight(true);
   Serial.printf("[boot] ui prefs: widget=%d (%s) night=%d\n",
                 ui.widget(), LvglDashboard::widgetName(ui.widget()), (int)ui.night());
@@ -91,31 +136,58 @@ void loop() {
   device.update(elapsed / 1000.0);
   slog.update();                    // event-driven imaging-night logger
 
-  // Gamepad: START cycles screens; SELECT is the immediate emergency stop.
+  // Gamepad: START cycles screens; short SELECT opens/activates settings.
   input.update();
   ButtonEvent ev;
   while (input.nextButton(ev)) {
     if (ev.button == Button::Select) {
-      client.noReply(":Q#");
-      Serial.println("[input] SELECT -> :Q# emergency stop sent");
+      if (ev.longPress) {
+        client.noReply(":Q#");
+        Serial.println("[input] SELECT long -> :Q# emergency stop sent");
+      } else if (ui.screenIndex() >= 2) {
+        ui.buttonSelect();
+        saveUiPrefs();
+      } else {
+        ui.showSettings();
+      }
     } else if (ev.button == Button::A && !ev.longPress) {
       ui.buttonA();                       // on SETTINGS: cycle radar widget
       saveUiPrefs();
+    } else if (ev.button == Button::B && !ev.longPress) {
+      ui.buttonB();                       // v9 screens: back / drill down
+    } else if (ev.button == Button::X && !ev.longPress) {
+      ui.buttonX();
+    } else if (ev.button == Button::Y && !ev.longPress) {
+      ui.buttonY();                       // v9 screens: sort / preset cycle
     } else if (ev.button == Button::Start) {
       if (ev.longPress) { ui.setNight(!ui.night()); saveUiPrefs();
                           Serial.printf("[input] START long -> %s mode\n", ui.night()?"NIGHT":"day"); }
       else ui.nextScreen();
+    } else if (ev.button == Button::Power) {
+      if (ev.longPress) {
+        Serial.println("[power] deep sleep; GPIO14 or RESET wakes");
+        display.sleep();
+      } else ui.nextScreen();
     }
   }
 
-  // Settings navigation is entirely local and remains responsive with no
-  // Wi-Fi or OnStep mount. A latch gives one move per stick deflection.
+  // A quick flick moves once. Holding starts a controlled repeat after
+  // 450 ms, then advances every 150 ms until the stick is released.
   {
-    static bool navLatch = false;
-    float y = input.joyY();
-    if (fabsf(y) < 0.35f) navLatch = false;
-    else if (!navLatch) { ui.settingsMove(y > 0 ? -1 : 1); navLatch = true; }
-  }
+    static int heldDir=0;
+    static uint32_t heldSince=0,lastRepeat=0;
+    float x=input.joyX(),y=input.joyY();
+    int dir=0;
+    if(fabsf(x)>=0.35f||fabsf(y)>=0.35f)
+      dir=fabsf(x)>fabsf(y)?(x>0?1:2):(y>0?3:4);
+    auto move=[&](int d){
+      if(d==1)ui.inputMove(1,0); else if(d==2)ui.inputMove(-1,0);
+      else if(d==3)ui.inputMove(0,-1); else if(d==4)ui.inputMove(0,1);
+    };
+    if(!dir){heldDir=0;heldSince=lastRepeat=0;}
+    else if(dir!=heldDir){heldDir=dir;heldSince=lastRepeat=now;move(dir);}
+    else if(now-heldSince>=450&&now-lastRepeat>=150){lastRepeat=now;move(dir);}
+    }
 
   // Manual slew on HOME only. The dominant joystick axis starts one OnStep
   // jog command; returning to center or changing direction stops it first.

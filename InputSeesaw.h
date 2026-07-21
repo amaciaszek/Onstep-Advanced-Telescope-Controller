@@ -39,7 +39,7 @@ public:
             }
         }
         pinMode(0, INPUT_PULLUP);   // enclosure button 1 (BOOT) -> A/change
-        pinMode(14, INPUT_PULLUP);  // enclosure button 2 -> START/next screen
+        pinMode(14, INPUT_PULLUP);  // enclosure button 2 -> power key
         if (!available_) return false;
         uint32_t pinMask = mask();
         ss_.pinModeBulk(pinMask, INPUT_PULLUP);
@@ -52,7 +52,7 @@ public:
 
     void update() override {
         edgeLocal(Button::A, 0, 6);
-        edgeLocal(Button::Start, 14, 7);
+        edgeLocal(Button::Power, 14, 7);
 
         // The gamepad is optional during UI/network bring-up.  When it is not
         // connected, simply report a centered stick and no button events.
@@ -97,17 +97,11 @@ private:
         int i = (int)b;
         if (down && downAt_[i] == 0) {
             downAt_[i] = millis();
-            if (b == Button::Select) {                       // instant e-stop
-                ButtonEvent ev; ev.button = Button::Select; ev.longPress = false;
-                q_.push_back(ev);
-            }
         } else if (!down && downAt_[i] != 0) {
             uint32_t held = millis() - downAt_[i];
             downAt_[i] = 0;
-            if (b != Button::Select) {
-                ButtonEvent ev; ev.button = b; ev.longPress = (held >= LONG_MS);
-                q_.push_back(ev);
-            }
+            ButtonEvent ev; ev.button = b; ev.longPress = (held >= LONG_MS);
+            q_.push_back(ev);
         }
     }
     void edgeLocal(Button b, uint8_t pin, int stateIndex) {

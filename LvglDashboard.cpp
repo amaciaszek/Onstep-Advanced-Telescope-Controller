@@ -1,8 +1,12 @@
 #include "LvglDashboard.h"
+#include "ScreenModule.h"
+#include "ScreenSky.h"
+#include "ScreenCatalog.h"
 #include <Arduino.h>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 
 // ---------------------------------------------------------------- themes ---
 static const Theme DAY = {
@@ -16,6 +20,16 @@ static const Theme DAY = {
     &ui_img_icon_battery,&ui_img_icon_temperature,&ui_img_panel_metric,&ui_img_sky_radar_frame,
     {{&ui_img_nav_home,&ui_img_nav_home},{&ui_img_nav_goto,&ui_img_nav_goto},
      {&ui_img_nav_align,&ui_img_nav_align},{&ui_img_nav_menu,&ui_img_nav_menu}},
+    // objGlyph[TypeGroup][outline,filled]
+    {{&ui_img_obj_galaxy,&ui_img_obj_galaxy_f},
+     {&ui_img_obj_planetary,&ui_img_obj_planetary_f},
+     {&ui_img_obj_globular,&ui_img_obj_globular_f},
+     {&ui_img_obj_nebula,&ui_img_obj_nebula_f},
+     {&ui_img_obj_cluster,&ui_img_obj_cluster_f},
+     {&ui_img_obj_remnant,&ui_img_obj_remnant_f}},
+    {&ui_img_moon_0,&ui_img_moon_1,&ui_img_moon_2,&ui_img_moon_3,
+     &ui_img_moon_4,&ui_img_moon_5,&ui_img_moon_6,&ui_img_moon_7},
+    {&ui_img_nav_sky,&ui_img_nav_sky_f},
     /*nightRule*/false
 };
 static const Theme NIGHT = {
@@ -29,8 +43,25 @@ static const Theme NIGHT = {
     &ui_img_n_icon_battery,&ui_img_n_icon_temperature,&ui_img_n_panel_metric,&ui_img_n_sky_radar_frame,
     {{&ui_img_n_nav_home,&ui_img_n_nav_home_f},{&ui_img_n_nav_goto,&ui_img_n_nav_goto_f},
      {&ui_img_n_nav_align,&ui_img_n_nav_align_f},{&ui_img_n_nav_menu,&ui_img_n_nav_menu_f}},
+    // Night glyphs separate by TEXTURE, not hue -- see gen_assets_v9.py
+    {{&ui_img_n_obj_galaxy,&ui_img_n_obj_galaxy_f},
+     {&ui_img_n_obj_planetary,&ui_img_n_obj_planetary_f},
+     {&ui_img_n_obj_globular,&ui_img_n_obj_globular_f},
+     {&ui_img_n_obj_nebula,&ui_img_n_obj_nebula_f},
+     {&ui_img_n_obj_cluster,&ui_img_n_obj_cluster_f},
+     {&ui_img_n_obj_remnant,&ui_img_n_obj_remnant_f}},
+    {&ui_img_n_moon_0,&ui_img_n_moon_1,&ui_img_n_moon_2,&ui_img_n_moon_3,
+     &ui_img_n_moon_4,&ui_img_n_moon_5,&ui_img_n_moon_6,&ui_img_n_moon_7},
+    {&ui_img_n_nav_sky,&ui_img_n_nav_sky_f},
     /*nightRule*/true
 };
+
+// ---- v9 screen registry --------------------------------------------------
+// ADD A SCREEN: subclass ScreenModule, add an instance here, bump
+// kModuleCount in LvglDashboard.h. nextScreen() picks it up automatically.
+static ScreenSky     s_screenSky;
+static ScreenCatalog s_screenCatalog;
+static ScreenModule* const kModules[] = { &s_screenSky, &s_screenCatalog };
 
 static const int BAR_X0=20, BAR_X1=176, BAR_Y=133, BAR_CX=(BAR_X0+BAR_X1)/2;
 static const int RCX=280, RCY=65, RR=28;   // radar center + usable radius
@@ -85,7 +116,7 @@ bool LvglDashboard::projectHA(double haH,double decDeg,double latDeg,int& px,int
 // ---------------------------------------------------------------- lifecycle
 const char* LvglDashboard::widgetName(int i){
     switch(i){case 0:return "SKY TRACK";case 1:return "MERIDIAN CLOCK";
-              case 2:return "GUIDE SCOPE";default:return "GEM MOUNT";}
+              case 2:return "PULSE GRAPH";default:return "GEM MOUNT";}
 }
 void LvglDashboard::begin(){ T_=&DAY; rebuild(); }
 
@@ -93,16 +124,77 @@ void LvglDashboard::setWidget(int idx){
     widgetIdx_=((idx%4)+4)%4;
     rebuild();
 }
+void LvglDashboard::setBrightness(int percent){
+    brightness_=percent<5?5:percent>50?50:percent;
+    if(brightnessHandler_) brightnessHandler_(brightness_);
+    if(settings_) rebuild();
+}
+void LvglDashboard::setShowTemperature(bool show){
+    if(showTemperature_==show) return;
+    showTemperature_=show;
+    if(home_) rebuild();
+}
+void LvglDashboard::setNetworkProfiles(const String ssid[3],const String password[3],int active){
+    for(int i=0;i<3;i++){ profileSsid_[i]=ssid[i]; profilePassword_[i]=password[i]; }
+    activeProfile_=active<0?0:active>2?2:active;
+    if(profilesScreen_) rebuild();
+}
+void LvglDashboard::openKeyboardForProfile(int slot){
+    editProfile_=slot; editSsid_=profileSsid_[slot]; editPassword_=profilePassword_[slot];
+    passwordStage_=false; keyboardMode_=0; keyboardSel_=0; screenIdx_=3;
+    refreshKeyboard(); lv_scr_load(keyboard_);
+}
 void LvglDashboard::buttonA(){
+    if(screenIdx_>=kModuleBase){ moduleButton('A'); return; }
+    if(screenIdx_==3){ keyboardSelect(); return; }
+    if(screenIdx_==4){ openKeyboardForProfile(profileSel_); return; }
     if(screenIdx_!=2) return;
     if(settingsSel_==0) setWidget(widgetIdx_+1);
     else if(settingsSel_==1) setNight(!night_);
-    else if(settingsSel_==2 && networkSetupHandler_) networkSetupHandler_();
+    else if(settingsSel_==2){
+        static const int levels[]={5,10,15,20,25,35,50};
+        int next=levels[0]; for(int v:levels) if(v>brightness_){next=v;break;}
+        setBrightness(next);
+    }
+    else if(settingsSel_==3) setShowTemperature(!showTemperature_);
+    else if(settingsSel_==4){
+        screenIdx_=4; lv_scr_load(profilesScreen_);
+    }
+}
+void LvglDashboard::buttonSelect(){
+    if(screenIdx_==4){
+        if(profileSsid_[profileSel_].isEmpty()) openKeyboardForProfile(profileSel_);
+        else if(profileActivateHandler_) profileActivateHandler_(profileSel_);
+        return;
+    }
+    buttonA();
 }
 void LvglDashboard::settingsMove(int delta){
     if(screenIdx_!=2 || !delta) return;
-    settingsSel_=(settingsSel_+delta+3)%3;
+    settingsSel_=(settingsSel_+delta+5)%5;
     rebuild();
+}
+void LvglDashboard::inputMove(int dx,int dy){
+    if(screenIdx_>=kModuleBase){
+        ScreenModule* m=module_[screenIdx_-kModuleBase];
+        if(m) m->onMove(dx,dy,sky_);
+        return;
+    }
+    if(screenIdx_==2){ if(dy) settingsMove(dy); return; }
+    if(screenIdx_==4){ if(dy){profileSel_=(profileSel_+dy+3)%3; rebuild();} return; }
+    if(screenIdx_!=3) return;
+    int next=keyboardSel_;
+    if(keyboardSel_<40){
+        int row=keyboardSel_/10,col=keyboardSel_%10;
+        if(dx) col=(col+dx+10)%10;
+        if(dy){ row+=dy; if(row<0) next=40+col/2; else if(row>3) next=40+col/2; else next=row*10+col; }
+        else next=row*10+col;
+    } else {
+        int col=keyboardSel_-40;
+        if(dx) next=40+(col+dx+5)%5;
+        if(dy<0) next=30+col*2;
+    }
+    keyboardSel_=next; refreshKeyboard();
 }
 
 void LvglDashboard::setNight(bool on){
@@ -111,28 +203,78 @@ void LvglDashboard::setNight(bool on){
     rebuild();
 }
 void LvglDashboard::rebuild(){
-    lv_obj_t* oldH=home_, *oldD=diag_, *oldS=settings_;
-    home_=lv_obj_create(nullptr); diag_=lv_obj_create(nullptr); settings_=lv_obj_create(nullptr);
-    for(lv_obj_t* s:{home_,diag_,settings_}){
+    lv_obj_t* oldH=home_, *oldD=diag_, *oldS=settings_, *oldK=keyboard_,*oldP=profilesScreen_;
+    home_=lv_obj_create(nullptr); diag_=lv_obj_create(nullptr); settings_=lv_obj_create(nullptr); keyboard_=lv_obj_create(nullptr); profilesScreen_=lv_obj_create(nullptr);
+    for(lv_obj_t* s:{home_,diag_,settings_,keyboard_,profilesScreen_}){
         lv_obj_set_style_bg_color(s,T_->bg,0); lv_obj_set_style_bg_opa(s,LV_OPA_COVER,0);
         lv_obj_clear_flag(s,LV_OBJ_FLAG_SCROLLABLE);
     }
-    makeHome(); makeDiag(); makeSettings();
+    makeHome(); makeDiag(); makeSettings(); makeKeyboard(); makeProfiles();
     lv_label_set_text(diagText_,diagCache_);
-    lv_obj_t* scr = screenIdx_==0?home_ : screenIdx_==1?diag_ : settings_;
+
+    lv_obj_t* oldM[kModuleCount];
+    for(int i=0;i<kModuleCount;++i) oldM[i]=moduleScreen_[i];
+    makeModuleScreens();
+
+    lv_obj_t* scr = screenIdx_>=kModuleBase
+        ? moduleScreen_[screenIdx_-kModuleBase]
+        : (screenIdx_==0?home_ : screenIdx_==1?diag_ : screenIdx_==2?settings_:screenIdx_==3?keyboard_:profilesScreen_);
     lv_scr_load(scr);
     if(oldH) lv_obj_del(oldH);
     if(oldD) lv_obj_del(oldD);
     if(oldS) lv_obj_del(oldS);
+    if(oldK) lv_obj_del(oldK);
+    if(oldP) lv_obj_del(oldP);
+    for(int i=0;i<kModuleCount;++i) if(oldM[i]) lv_obj_del(oldM[i]);
 }
+
+void LvglDashboard::makeModuleScreens(){
+    for(int i=0;i<kModuleCount;++i){
+        module_[i]=kModules[i];
+        lv_obj_t* s=lv_obj_create(nullptr);
+        lv_obj_set_style_bg_color(s,T_->bg,0);
+        lv_obj_set_style_bg_opa(s,LV_OPA_COVER,0);
+        lv_obj_clear_flag(s,LV_OBJ_FLAG_SCROLLABLE);
+        moduleScreen_[i]=s;
+        module_[i]->build(s,*T_);
+        lv_obj_t* foot=panel(s,4,138,312,27,5);
+        moduleHint_[i]=label(foot,5,7,302,13,module_[i]->hint(),
+                             &lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
+    }
+}
+
+bool LvglDashboard::moduleButton(char which){
+    if(screenIdx_<kModuleBase) return false;
+    ScreenModule* m=module_[screenIdx_-kModuleBase];
+    return m && m->onButton(which,sky_);
+}
+
+void LvglDashboard::buttonB(){ moduleButton('B'); }
+void LvglDashboard::buttonX(){ moduleButton('X'); }
+void LvglDashboard::buttonY(){ moduleButton('Y'); }
 void LvglDashboard::nextScreen(){
-    screenIdx_=(screenIdx_+1)%3;
-    lv_obj_t* scr = screenIdx_==0?home_ : screenIdx_==1?diag_ : settings_;
+    // HOME -> SKY -> CATALOG -> SETTINGS -> DIAG -> HOME
+    if(screenIdx_==0)      screenIdx_=kModuleBase;        // SKY
+    else if(screenIdx_==kModuleBase)   screenIdx_=kModuleBase+1; // CATALOG
+    else if(screenIdx_==kModuleBase+1) screenIdx_=2;      // SETTINGS
+    else if(screenIdx_==2) screenIdx_=1;                  // DIAG
+    else                   screenIdx_=0;
+    lv_obj_t* scr = screenIdx_>=kModuleBase
+        ? moduleScreen_[screenIdx_-kModuleBase]
+        : (screenIdx_==0?home_ : screenIdx_==1?diag_ : settings_);
     // Guard: starting a screen-load animation while one is still running
     // crashes LVGL 8. Rapid presses fall back to an instant switch.
     uint32_t now=millis();
     if(now-lastSwitchMs_>250) lv_scr_load_anim(scr,LV_SCR_LOAD_ANIM_MOVE_LEFT,180,0,false);
     else                      lv_scr_load(scr);
+    lastSwitchMs_=now;
+}
+void LvglDashboard::showSettings(){
+    if(screenIdx_==2) return;
+    screenIdx_=2;
+    uint32_t now=millis();
+    if(now-lastSwitchMs_>250) lv_scr_load_anim(settings_,LV_SCR_LOAD_ANIM_MOVE_LEFT,180,0,false);
+    else                      lv_scr_load(settings_);
     lastSwitchMs_=now;
 }
 void LvglDashboard::setDiagText(const char* t){
@@ -149,7 +291,8 @@ void LvglDashboard::makeHome(){
     parkIcon_=image(P,71,3,T_->parkUnlocked[1]);
     guideIcon_=image(P,104,3,T_->guide[0],T_->nightRule?LV_OPA_COVER:LV_OPA_30);
     image(P,143,3,T_->battery); battery_=label(P,165,5,38,16,"--%",&lv_font_montserrat_14,T_->text);
-    image(P,207,3,T_->temperature); temp_=label(P,229,5,42,16,"--C",&lv_font_montserrat_14,T_->text);
+    tempIcon_=image(P,207,3,T_->temperature); temp_=label(P,229,5,42,16,"--C",&lv_font_montserrat_14,T_->text);
+    if(!showTemperature_){lv_obj_add_flag(tempIcon_,LV_OBJ_FLAG_HIDDEN);lv_obj_add_flag(temp_,LV_OBJ_FLAG_HIDDEN);}
     slewImg_=image(P,270,3,T_->slew[1]); rate_=label(P,293,5,24,16,"-x",&lv_font_montserrat_14,T_->text);
 
     ribbon_=lv_obj_create(P); lv_obj_set_pos(ribbon_,3,26); lv_obj_set_size(ribbon_,314,2);
@@ -294,39 +437,24 @@ void LvglDashboard::buildWidget(lv_obj_t* P){
         clkCap_=label(P,258,52,44,10,"T-MER",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
         clkText_=label(P,256,70,48,14,"--:--",&lv_font_montserrat_12,T_->text,LV_TEXT_ALIGN_CENTER);
         break; }
-    case 2: { // GUIDE SCOPE
-        image(P,244,29,T_->radarFrame);
-        gsCrossV_=lv_line_create(P);
-        gsVPts_[0]={280,40}; gsVPts_[1]={280,90};
-        lv_line_set_points(gsCrossV_,gsVPts_,2);
+    case 2: { // CLASSIC ONSTEP PULSE GRAPH (coordinate deltas, never fake RMS)
+        panel(P,244,29,73,73,8);
         gsCrossH_=lv_line_create(P);
-        gsHPts_[0]={255,65}; gsHPts_[1]={305,65};
+        gsHPts_[0]={247,65}; gsHPts_[1]={313,65};
         lv_line_set_points(gsCrossH_,gsHPts_,2);
-        for(lv_obj_t* o:{gsCrossV_,gsCrossH_}){
-            lv_obj_set_style_line_color(o,T_->edge,0); lv_obj_set_style_line_width(o,1,0);
+        lv_obj_set_style_line_color(gsCrossH_,T_->edge,0); lv_obj_set_style_line_width(gsCrossH_,1,0);
+        pulseRaLine_=lv_line_create(P); pulseDecLine_=lv_line_create(P);
+        lv_obj_set_style_line_color(pulseRaLine_,T_->accent,0);
+        lv_obj_set_style_line_color(pulseDecLine_,T_->good,0);
+        for(lv_obj_t* o:{pulseRaLine_,pulseDecLine_}) lv_obj_set_style_line_width(o,2,0);
+        for(int i=0;i<20;i++){
+            pulseRaPts_[i]={(lv_coord_t)(247+i*3),(lv_coord_t)65};
+            pulseDecPts_[i]={(lv_coord_t)(247+i*3),(lv_coord_t)65};
         }
-        gsRipple_=lv_obj_create(P); lv_obj_set_size(gsRipple_,8,8);
-        lv_obj_clear_flag(gsRipple_,LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_radius(gsRipple_,LV_RADIUS_CIRCLE,0);
-        lv_obj_set_style_bg_opa(gsRipple_,LV_OPA_0,0);
-        lv_obj_set_style_border_color(gsRipple_,T_->good,0);
-        lv_obj_set_style_border_width(gsRipple_,1,0);
-        lv_obj_add_flag(gsRipple_,LV_OBJ_FLAG_HIDDEN);
-        gsStar_=lv_obj_create(P); lv_obj_set_size(gsStar_,5,5);
-        lv_obj_clear_flag(gsStar_,LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_style_radius(gsStar_,LV_RADIUS_CIRCLE,0);
-        lv_obj_set_style_bg_color(gsStar_,T_->text,0);
-        lv_obj_set_style_bg_opa(gsStar_,LV_OPA_COVER,0);
-        lv_obj_set_style_border_width(gsStar_,0,0);
-        // RA / DEC correction kick bars under the circle
-        gsBarRA_=lv_obj_create(P); lv_obj_set_pos(gsBarRA_,250,99); lv_obj_set_size(gsBarRA_,2,2);
-        gsBarDE_=lv_obj_create(P); lv_obj_set_pos(gsBarDE_,286,99); lv_obj_set_size(gsBarDE_,2,2);
-        for(lv_obj_t* o:{gsBarRA_,gsBarDE_}){
-            lv_obj_clear_flag(o,LV_OBJ_FLAG_SCROLLABLE);
-            lv_obj_set_style_radius(o,1,0); lv_obj_set_style_border_width(o,0,0);
-            lv_obj_set_style_bg_color(o,T_->good,0); lv_obj_set_style_bg_opa(o,LV_OPA_COVER,0);
-        }
-        gsCap_=label(P,252,99,60,10,"RA      DE",&lv_font_montserrat_10,T_->dim);
+        lv_line_set_points(pulseRaLine_,pulseRaPts_,20);
+        lv_line_set_points(pulseDecLine_,pulseDecPts_,20);
+        label(P,248,33,64,10,"RA   DEC",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
+        pulseDir_=label(P,247,89,67,10,"WAITING",&lv_font_montserrat_10,T_->text,LV_TEXT_ALIGN_CENTER);
         break; }
     default: { // GEM MOUNT
         panel(P,244,29,73,73,8);
@@ -381,22 +509,134 @@ void LvglDashboard::makeSettings(){
     lv_obj_t* P=settings_;
     panel(P,3,3,314,20,6);
     label(P,10,7,-1,0,"SETTINGS",&lv_font_montserrat_12,T_->accent);
-    label(P,170,7,144,14,"A = change   START = next",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_RIGHT);
+    label(P,142,7,172,14,"A/SELECT change  START next",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_RIGHT);
     panel(P,3,27,314,120,8);
-    const char* names[3]={"RADAR WIDGET","NIGHT MODE","WI-FI / ONSTEP SETUP"};
-    String values[3]={widgetName(widgetIdx_),night_?"ON (red)":"OFF (day)","A: open setup AP"};
-    for(int i=0;i<3;i++){
+    const char* names[5]={"RADAR WIDGET","NIGHT MODE","BRIGHTNESS","TEMPERATURE","WI-FI SETUP"};
+    String values[5]={widgetName(widgetIdx_),night_?"ON":"OFF",String(brightness_)+"%",showTemperature_?"SHOW CHIP":"HIDDEN","A: profiles"};
+    for(int i=0;i<5;i++){
         bool selected=i==settingsSel_;
-        lv_obj_t* row=panel(P,10,34+i*35,300,29,5);
+        lv_obj_t* row=panel(P,10,29+i*22,300,19,4);
         if(selected){ lv_obj_set_style_border_color(row,T_->accent,0); lv_obj_set_style_bg_color(row,T_->edge,0); }
-        label(P,18,38+i*35,150,12,names[i],&lv_font_montserrat_10,selected?T_->accent:T_->dim);
-        label(P,18,50+i*35,282,13,values[i].c_str(),&lv_font_montserrat_12,T_->text);
+        label(P,18,32+i*22,150,11,names[i],&lv_font_montserrat_10,selected?T_->accent:T_->dim);
+        label(P,165,31+i*22,135,14,values[i].c_str(),&lv_font_montserrat_12,T_->text,LV_TEXT_ALIGN_RIGHT);
     }
-    label(P,3,152,314,14,"stick: select   A: change   START: next",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
+    label(P,3,152,314,14,"stick: select   A/SELECT: change",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
+}
+
+void LvglDashboard::makeKeyboard(){
+    lv_obj_t* P=keyboard_;
+    panel(P,3,2,314,24,6);
+    keyboardTitle_=label(P,9,6,100,15,"WI-FI NAME",&lv_font_montserrat_12,T_->accent);
+    keyboardValue_=label(P,105,6,205,15,"",&lv_font_montserrat_12,T_->text,LV_TEXT_ALIGN_RIGHT);
+    for(int i=0;i<40;i++){
+        int x=5+(i%10)*31,y=29+(i/10)*25;
+        lv_obj_t* cell=panel(P,x,y,29,23,3);
+        keyboardKeys_[i]=label(cell,0,3,29,16," ",&lv_font_montserrat_14,T_->text,LV_TEXT_ALIGN_CENTER);
+    }
+    const char* commands[5]={"CASE","SPACE","<","NEXT","EXIT"};
+    for(int i=0;i<5;i++){
+        lv_obj_t* cell=panel(P,5+i*63,132,59,32,4);
+        keyboardKeys_[40+i]=label(cell,0,8,59,16,commands[i],&lv_font_montserrat_10,T_->text,LV_TEXT_ALIGN_CENTER);
+    }
+    refreshKeyboard();
+}
+
+void LvglDashboard::makeProfiles(){
+    lv_obj_t* P=profilesScreen_;
+    panel(P,3,3,314,22,6);
+    label(P,10,7,150,14,"ONSTEP PROFILES",&lv_font_montserrat_12,T_->accent);
+    label(P,166,7,145,14,"A edit  SELECT use",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_RIGHT);
+    panel(P,3,29,314,112,8);
+    for(int i=0;i<3;i++){
+        bool selected=i==profileSel_;
+        lv_obj_t* row=panel(P,10,35+i*33,300,27,5);
+        if(selected){lv_obj_set_style_border_color(row,T_->accent,0);lv_obj_set_style_border_width(row,2,0);}
+        String title=String("PROFILE ")+String(i+1)+(i==activeProfile_?"  ACTIVE":"");
+        label(P,18,38+i*33,135,11,title.c_str(),&lv_font_montserrat_10,selected?T_->accent:T_->dim);
+        String name=profileSsid_[i].isEmpty()?"(empty)":profileSsid_[i];
+        if(name.length()>20) name=name.substring(0,20);
+        label(P,155,40+i*33,145,14,name.c_str(),&lv_font_montserrat_12,T_->text,LV_TEXT_ALIGN_RIGHT);
+    }
+    label(P,3,148,314,16,"stick select   A edit   SELECT activate",&lv_font_montserrat_10,T_->dim,LV_TEXT_ALIGN_CENTER);
+}
+
+void LvglDashboard::refreshKeyboard(){
+    if(!keyboard_) return;
+    static const char* sets[]={
+        "abcdefghijklmnopqrstuvwxyz0123456789.-_@",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_@",
+        "0123456789!@#$%&*+-_=.,:;?/()[]{}<>\\|~^"
+    };
+    const char* chars=sets[keyboardMode_];
+    size_t count=strlen(chars);
+    for(int i=0;i<40;i++){
+        char text[2]={i<(int)count?chars[i]:' ',0};
+        lv_label_set_text(keyboardKeys_[i],text);
+    }
+    lv_label_set_text(keyboardKeys_[40],keyboardMode_==0?"abc":keyboardMode_==1?"ABC":"123!");
+    lv_label_set_text(keyboardKeys_[43],passwordStage_?"ENTER":"NEXT");
+    lv_label_set_text(keyboardTitle_,passwordStage_?"PASSWORD":"WI-FI NAME");
+    String shown=passwordStage_?editPassword_:editSsid_;
+    if(shown.length()>20) shown="..."+shown.substring(shown.length()-17);
+    lv_label_set_text(keyboardValue_,shown.c_str());
+    for(int i=0;i<45;i++){
+        lv_obj_t* cell=lv_obj_get_parent(keyboardKeys_[i]);
+        bool selected=i==keyboardSel_;
+        lv_obj_set_style_border_color(cell,selected?T_->accent:T_->edge,0);
+        lv_obj_set_style_border_width(cell,selected?2:1,0);
+        lv_obj_set_style_border_opa(cell,LV_OPA_COVER,0);
+        lv_obj_set_style_bg_color(cell,selected?T_->edge:T_->panel,0);
+    }
+}
+
+void LvglDashboard::keyboardSelect(){
+    String& value=passwordStage_?editPassword_:editSsid_;
+    if(keyboardSel_<40){
+        static const char* sets[]={
+            "abcdefghijklmnopqrstuvwxyz0123456789.-_@",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_@",
+            "0123456789!@#$%&*+-_=.,:;?/()[]{}<>\\|~^"
+        };
+        size_t count=strlen(sets[keyboardMode_]);
+        if(keyboardSel_<(int)count && value.length()<63) value+=sets[keyboardMode_][keyboardSel_];
+    } else if(keyboardSel_==40) keyboardMode_=(keyboardMode_+1)%3;
+    else if(keyboardSel_==41 && value.length()<63) value+=' ';
+    else if(keyboardSel_==42 && value.length()) value.remove(value.length()-1);
+    else if(keyboardSel_==43){
+        if(!passwordStage_){ if(editSsid_.isEmpty()) return; passwordStage_=true; keyboardSel_=0; }
+        else if(networkSaveHandler_) networkSaveHandler_(editProfile_,editSsid_.c_str(),editPassword_.c_str());
+    } else if(keyboardSel_==44){ screenIdx_=4; lv_scr_load(profilesScreen_); }
+    refreshKeyboard();
 }
 
 // ---------------------------------------------------------------- update ---
 void LvglDashboard::update(const MountStatus& m,const UiExtras& ex){
+    // Advance the sky/catalog state. tick() enforces its own cadence, so
+    // calling it every frame is cheap; the expensive rebuild happens at most
+    // once every 30 s and never inside an LVGL redraw.
+    {
+        const uint32_t now=millis();
+        const uint32_t dt=lastSkyMs_?now-lastSkyMs_:0;
+        lastSkyMs_=now;
+        sky_.tick(dt,m);
+    }
+    // Module screens are self-contained: update only the visible one.
+    if(screenIdx_>=kModuleBase){
+        const int idx=screenIdx_-kModuleBase;
+        ScreenModule* mod=module_[idx];
+        if(mod){
+            mod->update(m,ex,sky_);
+            const char* hint=mod->hint();
+            if(strcmp(lv_label_get_text(moduleHint_[idx]),hint)!=0)
+                lv_label_set_text(moduleHint_[idx],hint);
+        }
+        return;
+    }
+    if(screenIdx_==3 && millis()-keyboardBlinkMs_>=400){
+        keyboardBlinkMs_=millis(); keyboardBlinkOn_=!keyboardBlinkOn_;
+        lv_obj_t* cell=lv_obj_get_parent(keyboardKeys_[keyboardSel_]);
+        lv_obj_set_style_border_opa(cell,keyboardBlinkOn_?LV_OPA_COVER:LV_OPA_20,0);
+    }
     setText(rate_,"%dx",m.slewRate); setText(battery_,"%d%%",ex.batteryPct); setText(temp_,"%.0fC",ex.tempC);
     setIconState(wifiIcon_,T_->wifi,ex.wifiBars>0);
     setIconState(linkIcon_,T_->link,ex.online);
@@ -454,7 +694,7 @@ void LvglDashboard::update(const MountStatus& m,const UiExtras& ex){
         lv_label_set_text(adTitle_,"PULSE");
         lv_obj_add_flag(adLine1_,LV_OBJ_FLAG_HIDDEN); lv_obj_add_flag(adLine2_,LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(guideLine_,LV_OBJ_FLAG_HIDDEN);
-        double sample=sin(millis()/180.0)*1.5;
+        double sample=1.5; // honest binary pulse-presence trace from classic :GU#
         guideHistory_[guideHead_]=sample; guideHead_=(guideHead_+1)%20;
         for(int i=0;i<20;i++){double v=guideHistory_[(guideHead_+i)%20]; guidePts_[i].y=(lv_coord_t)(132-int(v*3.0));}
         lv_line_set_points(guideLine_,guidePts_,20);
@@ -576,31 +816,39 @@ void LvglDashboard::updateWidget(const MountStatus& m,const UiExtras& ex){
             lv_obj_set_style_arc_opa(clkArc_,bo,LV_PART_INDICATOR);
         }
         break; }
-    case 2: { // GUIDE SCOPE: star wanders with pulse activity, ripple on pulse edge
-        bool act=m.guidePulseActive&&ex.online;
-        // pseudo-random wander driven by two incommensurate sines
-        float amp=act?7.0f:1.2f;
-        float wx=amp*sin(millis()/430.0f)*sin(millis()/171.0f);
-        float wy=amp*sin(millis()/377.0f)*cos(millis()/233.0f);
-        gsX_+=(wx-gsX_)*0.3f; gsY_+=(wy-gsY_)*0.3f;
-        lv_obj_set_pos(gsStar_,RCX+int(gsX_)-2,RCY+int(gsY_)-2);
-        lv_obj_set_style_bg_color(gsStar_,act?T_->good:T_->text,0);
-        // ripple ring on pulse rising edge, expands + fades 600 ms
-        if(act&&!gsPulsePrev_) gsRippleT0_=millis();
-        gsPulsePrev_=act;
-        uint32_t dt=millis()-gsRippleT0_;
-        if(gsRippleT0_&&dt<600){
-            int rr=4+int(dt*0.04);
-            lv_obj_set_size(gsRipple_,rr*2,rr*2);
-            lv_obj_set_pos(gsRipple_,RCX+int(gsX_)-rr,RCY+int(gsY_)-rr);
-            lv_obj_set_style_border_opa(gsRipple_,(lv_opa_t)(255-dt*255/600),0);
-            lv_obj_clear_flag(gsRipple_,LV_OBJ_FLAG_HIDDEN);
-        } else lv_obj_add_flag(gsRipple_,LV_OBJ_FLAG_HIDDEN);
-        // correction kick bars
-        int hRA=act?2+abs(int(8*sin(millis()/301.0f))):2;
-        int hDE=act?2+abs(int(8*sin(millis()/257.0f))):2;
-        lv_obj_set_size(gsBarRA_,14,hRA); lv_obj_set_pos(gsBarRA_,254,110-hRA);
-        lv_obj_set_size(gsBarDE_,14,hDE); lv_obj_set_pos(gsBarDE_,290,110-hDE);
+    case 2: { // PULSE GRAPH: measured signed coordinate changes from classic OnStep
+        bool first=isnan(pulseLastRa_)||isnan(pulseLastDec_);
+        double dra=m.raHours-pulseLastRa_; while(dra>12)dra-=24; while(dra<-12)dra+=24;
+        double dde=m.decDeg-pulseLastDec_;
+        bool fresh=first||fabs(dra)>1e-9||fabs(dde)>1e-9;
+        if(first){ pulseLastRa_=m.raHours; pulseLastDec_=m.decDeg; }
+        else if(fresh){
+            // Signed angular change in arcseconds. Classic :GU# exposes that
+            // a pulse is active, not its direction, so direction is inferred
+            // honestly from the RA/Dec coordinates rather than invented RMS.
+            float ra=(float)(dra*15.0*3600.0*cos(m.decDeg*M_PI/180.0));
+            float de=(float)(dde*3600.0);
+            pulseLastRa_=m.raHours; pulseLastDec_=m.decDeg;
+            pulseRaHistory_[pulseHead_]=m.guidePulseActive?ra:0;
+            pulseDecHistory_[pulseHead_]=m.guidePulseActive?de:0;
+            pulseHead_=(pulseHead_+1)%20;
+        }
+        float peak=0.25f;
+        for(int i=0;i<20;i++) peak=fmaxf(peak,fmaxf(fabsf(pulseRaHistory_[i]),fabsf(pulseDecHistory_[i])));
+        for(int i=0;i<20;i++){
+            int h=(pulseHead_+i)%20;
+            pulseRaPts_[i].y=(lv_coord_t)(65-pulseRaHistory_[h]/peak*21);
+            pulseDecPts_[i].y=(lv_coord_t)(65-pulseDecHistory_[h]/peak*21);
+        }
+        lv_line_set_points(pulseRaLine_,pulseRaPts_,20);
+        lv_line_set_points(pulseDecLine_,pulseDecPts_,20);
+        float lastRa=pulseRaHistory_[(pulseHead_+19)%20],lastDe=pulseDecHistory_[(pulseHead_+19)%20];
+        if(m.guidePulseActive){
+            const char* rd=fabsf(lastRa)<0.01f?"RA?":lastRa>0?"RA+":"RA-";
+            const char* dd=fabsf(lastDe)<0.01f?"DE?":lastDe>0?"DE+":"DE-";
+            setText(pulseDir_,"%s %s",rd,dd);
+            lv_obj_set_style_text_color(pulseDir_,T_->good,0);
+        } else { setText(pulseDir_,ex.online?"IDLE":"OFFLINE"); lv_obj_set_style_text_color(pulseDir_,T_->dim,0); }
         break; }
     default: { // GEM MOUNT: counterweight bar swings with HA, tube flips with pier
         double ha=0;
