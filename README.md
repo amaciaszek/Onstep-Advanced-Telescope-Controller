@@ -1,5 +1,8 @@
 # platform_esp32 — LilyGO T-Display-S3 firmware
 
+For physical controls, screen-by-screen instructions, GoTo safety, Wi-Fi setup,
+and 320×170 visual references, see [`USER_GUIDE.md`](USER_GUIDE.md).
+
 This is the hardware backend. It plugs your **proven OnStep networking** and the
 **tested `onstep::` protocol decoder** into the *same* `shared/` App/UI that the
 desktop simulator runs. Nothing in `shared/` changes between sim and hardware.
