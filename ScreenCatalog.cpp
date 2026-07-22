@@ -7,9 +7,19 @@ static const char* kGroupLabel[6] = {
     "GALAXY", "PLANETARY", "GLOBULAR", "NEBULA", "CLUSTER", "REMNANT"
 };
 
-// Map an ObjType to the glyph slot (which is indexed by TypeGroup).
+// Representative subtype for each coarse filter chip. List and detail rows
+// use the record's exact subtype, so morphology survives past filtering.
+static const catalog::ObjType kGroupGlyph[6] = {
+    catalog::TYPE_GAL_SA,
+    catalog::TYPE_PLANETARY,
+    catalog::TYPE_GLOBULAR,
+    catalog::TYPE_EMISSION,
+    catalog::TYPE_OPENCLUSTER,
+    catalog::TYPE_REMNANT,
+};
+
 static int glyphSlot(const catalog::Record& r) {
-    return int(catalog::groupOf(r));
+    return int(catalog::typeOf(r));
 }
 
 const char* ScreenCatalog::hint() const {
@@ -109,7 +119,7 @@ void ScreenCatalog::buildFilter(lv_obj_t* root, const Theme& T) {
         lv_obj_set_style_border_width(c, 1, 0);
         lv_obj_set_style_pad_all(c, 0, 0);
         chip_[i] = c;
-        chipIcon_[i] = image(c, 1, 0, T.objGlyph[i][0]);
+        chipIcon_[i] = image(c, 1, 0, T.objGlyph[kGroupGlyph[i]][0]);
         chipLbl_[i] = label(c, 20, 2, cw - 23, kGroupLabel[i], FONT_TINY,
                             T.dim);
     }
@@ -309,7 +319,8 @@ void ScreenCatalog::updateFilter(SkyContext& ctx) {
     for (int i = 0; i < 6; ++i) {
         const bool on = f.group(catalog::TypeGroup(i));
         const bool focus = (filterFocus_ == 9 + i);
-        lv_img_set_src(chipIcon_[i], T_->objGlyph[i][on ? 1 : 0]);
+        lv_img_set_src(chipIcon_[i],
+                       T_->objGlyph[kGroupGlyph[i]][on ? 1 : 0]);
         lv_obj_set_style_img_opa(chipIcon_[i],
             on ? LV_OPA_COVER : LV_OPA_50, 0);
         lv_obj_set_style_bg_opa(chip_[i], on ? LV_OPA_COVER : LV_OPA_40, 0);

@@ -25,27 +25,55 @@ const char* constellation(const Record& r) {
 
 const char* typeName(ObjType t) {
     switch (t) {
-        case TYPE_GALAXY:      return "GALAXY";
+        case TYPE_GAL_E:       return "ELLIPTICAL GALAXY";
+        case TYPE_GAL_ES0:     return "ELLIPTICAL/LENTICULAR";
+        case TYPE_GAL_S0:      return "LENTICULAR GALAXY";
+        case TYPE_GAL_S0A:     return "LENTICULAR (S0-Aa)";
+        case TYPE_GAL_SA:      return "SPIRAL GALAXY";
+        case TYPE_GAL_SB:      return "BARRED SPIRAL";
+        case TYPE_GAL_SAB:     return "INTERMEDIATE SPIRAL";
+        case TYPE_GAL_IRR:     return "IRREGULAR GALAXY";
+        case TYPE_GAL_GENERIC: return "GALAXY";
+        case TYPE_GAL_PAIR:    return "GALAXY PAIR";
+        case TYPE_GAL_TRIPLET: return "GALAXY TRIPLET";
+        case TYPE_GAL_GROUP:   return "GROUP OF GALAXIES";
+        case TYPE_EMISSION:    return "EMISSION NEBULA";
+        case TYPE_HII:         return "HII IONIZED REGION";
+        case TYPE_REFLECTION:  return "REFLECTION NEBULA";
+        case TYPE_DARK:        return "DARK NEBULA";
         case TYPE_PLANETARY:   return "PLANETARY NEBULA";
-        case TYPE_GLOBULAR:    return "GLOBULAR CLUSTER";
-        case TYPE_NEBULA:      return "NEBULA";
-        case TYPE_OPENCLUSTER: return "OPEN CLUSTER";
         case TYPE_REMNANT:     return "SUPERNOVA REMNANT";
-        case TYPE_GALGROUP:    return "GALAXY GROUP";
-        default:               return "CLUSTER + NEBULA";
+        case TYPE_CLUSTERNEB:  return "CLUSTER + NEBULA";
+        case TYPE_GLOBULAR:    return "GLOBULAR CLUSTER";
+        case TYPE_OPENCLUSTER: return "OPEN CLUSTER";
+        default:               return "NEBULA";
     }
 }
 
 const char* typeShort(ObjType t) {
     switch (t) {
-        case TYPE_GALAXY:      return "GAL";
+        case TYPE_GAL_E:       return "E";
+        case TYPE_GAL_ES0:     return "E-S0";
+        case TYPE_GAL_S0:      return "S0";
+        case TYPE_GAL_S0A:     return "S0a";
+        case TYPE_GAL_SA:      return "SA";
+        case TYPE_GAL_SB:      return "SB";
+        case TYPE_GAL_SAB:     return "SAB";
+        case TYPE_GAL_IRR:     return "Irr";
+        case TYPE_GAL_GENERIC: return "GAL";
+        case TYPE_GAL_PAIR:    return "PAIR";
+        case TYPE_GAL_TRIPLET: return "TRIP";
+        case TYPE_GAL_GROUP:   return "GRP";
+        case TYPE_EMISSION:    return "EN";
+        case TYPE_HII:         return "HII";
+        case TYPE_REFLECTION:  return "RN";
+        case TYPE_DARK:        return "DN";
         case TYPE_PLANETARY:   return "PN";
-        case TYPE_GLOBULAR:    return "GC";
-        case TYPE_NEBULA:      return "NEB";
-        case TYPE_OPENCLUSTER: return "OC";
         case TYPE_REMNANT:     return "SNR";
-        case TYPE_GALGROUP:    return "GRP";
-        default:               return "C+N";
+        case TYPE_CLUSTERNEB:  return "C+N";
+        case TYPE_GLOBULAR:    return "GC";
+        case TYPE_OPENCLUSTER: return "OC";
+        default:               return "NEB";
     }
 }
 

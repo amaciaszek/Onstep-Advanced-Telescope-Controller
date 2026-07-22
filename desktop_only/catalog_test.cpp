@@ -38,6 +38,48 @@ int main() {
     check("major arcmin", catalog::majorArcmin(*m31), 177.83, 0.06);
     check("magnitude", catalog::magnitude(*m31), 3.44, 0.06);
     check("surface brightness", catalog::surfBright(*m31), 23.63, 0.06);
+    // M31's Classification is blank in this dataset, so it correctly falls to
+    // the generic galaxy glyph rather than being guessed. Its group is still
+    // GALAXY. (Morphology for named Messiers is often blank; the fainter NGC
+    // catalogue is where the Hubble types are populated.)
+    check("M31 group is galaxy",
+          catalog::groupOf(*m31) == catalog::GRP_GALAXY ? 1.0 : 0.0, 1.0, 0.0);
+    // Objects with populated classifications must resolve to the right glyph.
+    auto findType = [](const char* d) -> int {
+        for (uint16_t i = 0; i < catalog::kRecordCount; ++i)
+            if (std::string(catalog::designation(catalog::kRecords[i])) == d)
+                return catalog::typeOf(catalog::kRecords[i]);
+        return -1;
+    };
+    check("M87 is elliptical", findType("M87"), catalog::TYPE_GAL_E, 0.0);
+    check("M51 is intermediate spiral", findType("M51"),
+          catalog::TYPE_GAL_SAB, 0.0);
+    check("M104 is spiral", findType("M104"), catalog::TYPE_GAL_SA, 0.0);
+
+    // Morphology spread: every galaxy subtype 0..8 should appear, and every
+    // galaxy record must map back to GRP_GALAXY.
+    {
+        int seen[catalog::TYPE_COUNT] = {0};
+        int galaxyMisgrouped = 0;
+        for (uint16_t i = 0; i < catalog::kRecordCount; ++i) {
+            const catalog::ObjType t = catalog::typeOf(catalog::kRecords[i]);
+            seen[t]++;
+            if (catalog::isGalaxy(t) &&
+                catalog::groupOf(catalog::kRecords[i]) != catalog::GRP_GALAXY)
+                ++galaxyMisgrouped;
+        }
+        int morphs = 0;
+        for (int t = catalog::TYPE_GAL_E; t <= catalog::TYPE_GAL_IRR; ++t)
+            if (seen[t]) ++morphs;
+        std::printf("\nmorphology: %d of 8 spiral/elliptical subtypes present\n",
+                    morphs);
+        check("all 8 galaxy morphologies present", morphs, 8.0, 0.0);
+        check("galaxies map to GALAXY group", galaxyMisgrouped, 0.0, 0.0);
+        check("barred spirals exist", seen[catalog::TYPE_GAL_SB] > 0 ? 1.0 : 0.0,
+              1.0, 0.0);
+        check("ellipticals exist", seen[catalog::TYPE_GAL_E] > 0 ? 1.0 : 0.0,
+              1.0, 0.0);
+    }
 
     // ---- geometry ----------------------------------------------------
     std::printf("\ngeometry\n");

@@ -32,7 +32,7 @@ struct Theme {
     // In DAY mode the six differ by hue. In NIGHT mode hue is unavailable,
     // so they differ by interior TEXTURE instead: smooth / annulus /
     // stipple / hatch / points / torn arc. See tools/gen_assets_v9.py.
-    const lv_img_dsc_t *objGlyph[6][2];
+    const lv_img_dsc_t *objGlyph[catalog::GLYPH_COUNT][2];
     const lv_img_dsc_t *moon[8];   // phase 0=new, 2=first qtr, 4=full
     const lv_img_dsc_t *navSky[2];
     bool nightRule;                // true = swap outline/filled instead of opacity dim

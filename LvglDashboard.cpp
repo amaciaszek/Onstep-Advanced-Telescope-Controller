@@ -20,13 +20,29 @@ static const Theme DAY = {
     &ui_img_icon_battery,&ui_img_icon_temperature,&ui_img_panel_metric,&ui_img_sky_radar_frame,
     {{&ui_img_nav_home,&ui_img_nav_home},{&ui_img_nav_goto,&ui_img_nav_goto},
      {&ui_img_nav_align,&ui_img_nav_align},{&ui_img_nav_menu,&ui_img_nav_menu}},
-    // objGlyph[TypeGroup][outline,filled]
-    {{&ui_img_obj_galaxy,&ui_img_obj_galaxy_f},
+    // objGlyph[ObjType][outline,filled]
+    {{&ui_img_obj_gal_e,&ui_img_obj_gal_e_f},
+     {&ui_img_obj_gal_es0,&ui_img_obj_gal_es0_f},
+     {&ui_img_obj_gal_s0,&ui_img_obj_gal_s0_f},
+     {&ui_img_obj_gal_s0a,&ui_img_obj_gal_s0a_f},
+     {&ui_img_obj_gal_sa,&ui_img_obj_gal_sa_f},
+     {&ui_img_obj_gal_sb,&ui_img_obj_gal_sb_f},
+     {&ui_img_obj_gal_sab,&ui_img_obj_gal_sab_f},
+     {&ui_img_obj_gal_irr,&ui_img_obj_gal_irr_f},
+     {&ui_img_obj_gal_generic,&ui_img_obj_gal_generic_f},
+     {&ui_img_obj_gal_pair,&ui_img_obj_gal_pair_f},
+     {&ui_img_obj_gal_triplet,&ui_img_obj_gal_triplet_f},
+     {&ui_img_obj_gal_group,&ui_img_obj_gal_group_f},
+     {&ui_img_obj_emission,&ui_img_obj_emission_f},
+     {&ui_img_obj_hii,&ui_img_obj_hii_f},
+     {&ui_img_obj_reflection,&ui_img_obj_reflection_f},
+     {&ui_img_obj_dark,&ui_img_obj_dark_f},
      {&ui_img_obj_planetary,&ui_img_obj_planetary_f},
+     {&ui_img_obj_remnant,&ui_img_obj_remnant_f},
+     {&ui_img_obj_clusterneb,&ui_img_obj_clusterneb_f},
      {&ui_img_obj_globular,&ui_img_obj_globular_f},
-     {&ui_img_obj_nebula,&ui_img_obj_nebula_f},
-     {&ui_img_obj_cluster,&ui_img_obj_cluster_f},
-     {&ui_img_obj_remnant,&ui_img_obj_remnant_f}},
+     {&ui_img_obj_opencluster,&ui_img_obj_opencluster_f},
+     {&ui_img_obj_nebula,&ui_img_obj_nebula_f}},
     {&ui_img_moon_0,&ui_img_moon_1,&ui_img_moon_2,&ui_img_moon_3,
      &ui_img_moon_4,&ui_img_moon_5,&ui_img_moon_6,&ui_img_moon_7},
     {&ui_img_nav_sky,&ui_img_nav_sky_f},
@@ -43,13 +59,29 @@ static const Theme NIGHT = {
     &ui_img_n_icon_battery,&ui_img_n_icon_temperature,&ui_img_n_panel_metric,&ui_img_n_sky_radar_frame,
     {{&ui_img_n_nav_home,&ui_img_n_nav_home_f},{&ui_img_n_nav_goto,&ui_img_n_nav_goto_f},
      {&ui_img_n_nav_align,&ui_img_n_nav_align_f},{&ui_img_n_nav_menu,&ui_img_n_nav_menu_f}},
-    // Night glyphs separate by TEXTURE, not hue -- see gen_assets_v9.py
-    {{&ui_img_n_obj_galaxy,&ui_img_n_obj_galaxy_f},
+    // Night variants retain the same silhouettes in the red channel only.
+    {{&ui_img_n_obj_gal_e,&ui_img_n_obj_gal_e_f},
+     {&ui_img_n_obj_gal_es0,&ui_img_n_obj_gal_es0_f},
+     {&ui_img_n_obj_gal_s0,&ui_img_n_obj_gal_s0_f},
+     {&ui_img_n_obj_gal_s0a,&ui_img_n_obj_gal_s0a_f},
+     {&ui_img_n_obj_gal_sa,&ui_img_n_obj_gal_sa_f},
+     {&ui_img_n_obj_gal_sb,&ui_img_n_obj_gal_sb_f},
+     {&ui_img_n_obj_gal_sab,&ui_img_n_obj_gal_sab_f},
+     {&ui_img_n_obj_gal_irr,&ui_img_n_obj_gal_irr_f},
+     {&ui_img_n_obj_gal_generic,&ui_img_n_obj_gal_generic_f},
+     {&ui_img_n_obj_gal_pair,&ui_img_n_obj_gal_pair_f},
+     {&ui_img_n_obj_gal_triplet,&ui_img_n_obj_gal_triplet_f},
+     {&ui_img_n_obj_gal_group,&ui_img_n_obj_gal_group_f},
+     {&ui_img_n_obj_emission,&ui_img_n_obj_emission_f},
+     {&ui_img_n_obj_hii,&ui_img_n_obj_hii_f},
+     {&ui_img_n_obj_reflection,&ui_img_n_obj_reflection_f},
+     {&ui_img_n_obj_dark,&ui_img_n_obj_dark_f},
      {&ui_img_n_obj_planetary,&ui_img_n_obj_planetary_f},
+     {&ui_img_n_obj_remnant,&ui_img_n_obj_remnant_f},
+     {&ui_img_n_obj_clusterneb,&ui_img_n_obj_clusterneb_f},
      {&ui_img_n_obj_globular,&ui_img_n_obj_globular_f},
-     {&ui_img_n_obj_nebula,&ui_img_n_obj_nebula_f},
-     {&ui_img_n_obj_cluster,&ui_img_n_obj_cluster_f},
-     {&ui_img_n_obj_remnant,&ui_img_n_obj_remnant_f}},
+     {&ui_img_n_obj_opencluster,&ui_img_n_obj_opencluster_f},
+     {&ui_img_n_obj_nebula,&ui_img_n_obj_nebula_f}},
     {&ui_img_n_moon_0,&ui_img_n_moon_1,&ui_img_n_moon_2,&ui_img_n_moon_3,
      &ui_img_n_moon_4,&ui_img_n_moon_5,&ui_img_n_moon_6,&ui_img_n_moon_7},
     {&ui_img_n_nav_sky,&ui_img_n_nav_sky_f},
@@ -118,11 +150,11 @@ const char* LvglDashboard::widgetName(int i){
     switch(i){case 0:return "SKY TRACK";case 1:return "MERIDIAN CLOCK";
               case 2:return "PULSE GRAPH";default:return "GEM MOUNT";}
 }
-void LvglDashboard::begin(){ T_=&DAY; rebuild(); }
+void LvglDashboard::begin(){ T_=night_?&NIGHT:&DAY; rebuild(); }
 
 void LvglDashboard::setWidget(int idx){
     widgetIdx_=((idx%4)+4)%4;
-    rebuild();
+    if(home_) rebuild();
 }
 void LvglDashboard::setBrightness(int percent){
     brightness_=percent<5?5:percent>50?50:percent;
@@ -200,10 +232,33 @@ void LvglDashboard::inputMove(int dx,int dy){
 void LvglDashboard::setNight(bool on){
     if(on==night_) return;
     night_=on; T_= on? &NIGHT : &DAY;
-    rebuild();
+    if(home_) rebuild();
 }
 void LvglDashboard::rebuild(){
     lv_obj_t* oldH=home_, *oldD=diag_, *oldS=settings_, *oldK=keyboard_,*oldP=profilesScreen_;
+    lv_obj_t* oldM[kModuleCount];
+    for(int i=0;i<kModuleCount;++i) oldM[i]=moduleScreen_[i];
+
+    // The complete v9 UI fits in LVGL's internal heap once, but not twice.
+    // Load one tiny holding screen and release the old tree before allocating
+    // its replacement. The previous build did this in the opposite order,
+    // causing lv_style_init() to receive nullptr during makeKeyboard().
+    lv_obj_t* holding=nullptr;
+    if(oldH || oldD || oldS || oldK || oldP){
+        holding=lv_obj_create(nullptr);
+        lv_obj_set_style_bg_color(holding,T_->bg,0);
+        lv_obj_set_style_bg_opa(holding,LV_OPA_COVER,0);
+        lv_scr_load(holding);
+        if(oldH) lv_obj_del(oldH);
+        if(oldD) lv_obj_del(oldD);
+        if(oldS) lv_obj_del(oldS);
+        if(oldK) lv_obj_del(oldK);
+        if(oldP) lv_obj_del(oldP);
+        for(int i=0;i<kModuleCount;++i) if(oldM[i]) lv_obj_del(oldM[i]);
+        home_=diag_=settings_=keyboard_=profilesScreen_=nullptr;
+        for(int i=0;i<kModuleCount;++i){ moduleScreen_[i]=nullptr; moduleHint_[i]=nullptr; }
+    }
+
     home_=lv_obj_create(nullptr); diag_=lv_obj_create(nullptr); settings_=lv_obj_create(nullptr); keyboard_=lv_obj_create(nullptr); profilesScreen_=lv_obj_create(nullptr);
     for(lv_obj_t* s:{home_,diag_,settings_,keyboard_,profilesScreen_}){
         lv_obj_set_style_bg_color(s,T_->bg,0); lv_obj_set_style_bg_opa(s,LV_OPA_COVER,0);
@@ -212,20 +267,18 @@ void LvglDashboard::rebuild(){
     makeHome(); makeDiag(); makeSettings(); makeKeyboard(); makeProfiles();
     lv_label_set_text(diagText_,diagCache_);
 
-    lv_obj_t* oldM[kModuleCount];
-    for(int i=0;i<kModuleCount;++i) oldM[i]=moduleScreen_[i];
     makeModuleScreens();
 
     lv_obj_t* scr = screenIdx_>=kModuleBase
         ? moduleScreen_[screenIdx_-kModuleBase]
         : (screenIdx_==0?home_ : screenIdx_==1?diag_ : screenIdx_==2?settings_:screenIdx_==3?keyboard_:profilesScreen_);
     lv_scr_load(scr);
-    if(oldH) lv_obj_del(oldH);
-    if(oldD) lv_obj_del(oldD);
-    if(oldS) lv_obj_del(oldS);
-    if(oldK) lv_obj_del(oldK);
-    if(oldP) lv_obj_del(oldP);
-    for(int i=0;i<kModuleCount;++i) if(oldM[i]) lv_obj_del(oldM[i]);
+    if(holding) lv_obj_del(holding);
+    lv_mem_monitor_t mem;
+    lv_mem_monitor(&mem);
+    Serial.printf("[ui] LVGL heap: %u free, %u largest, %u%% used, %u%% fragmented\n",
+                  (unsigned)mem.free_size,(unsigned)mem.free_biggest_size,
+                  (unsigned)mem.used_pct,(unsigned)mem.frag_pct);
 }
 
 void LvglDashboard::makeModuleScreens(){

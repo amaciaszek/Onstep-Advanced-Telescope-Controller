@@ -89,18 +89,14 @@ void setup() {
     Serial.println("FATAL: display init failed (TFT_eSPI Setup206 + 320x170 expected).");
     while (true) delay(1000);
   }
-  ui.begin();
+  // Load all persisted values before building LVGL. This avoids constructing
+  // and discarding several complete screen trees during boot.
+  prefs.begin("onstepui", false);
+  networkSetup.begin(prefs);
   ui.setNetworkSaveHandler(networkSaveHandler);
   ui.setProfileActivateHandler(profileActivateHandler);
   ui.setBrightnessHandler(brightnessHandler);
   ui.setGotoHandler(gotoHandler);
-  display.task();
-  console.setScreenHandler(nextScreenHandler);
-  console.setNightHandler(nightHandler);
-  console.setWidgetHandler(widgetHandler);
-  console.setLogHandler(logHandler);
-  prefs.begin("onstepui", false);
-  networkSetup.begin(prefs);
   String profileNames[3],profilePasswords[3];
   for(int i=0;i<3;i++){
     profileNames[i]=networkSetup.profile(i).ssid;
@@ -110,7 +106,13 @@ void setup() {
   ui.setWidget(prefs.getInt("widget", 0));
   ui.setBrightness(prefs.getInt("bright",25));
   ui.setShowTemperature(prefs.getBool("show_temp",false));
-  if (prefs.getBool("night", false)) ui.setNight(true);
+  ui.setNight(prefs.getBool("night", false));
+  ui.begin();
+  display.task();
+  console.setScreenHandler(nextScreenHandler);
+  console.setNightHandler(nightHandler);
+  console.setWidgetHandler(widgetHandler);
+  console.setLogHandler(logHandler);
   Serial.printf("[boot] ui prefs: widget=%d (%s) night=%d\n",
                 ui.widget(), LvglDashboard::widgetName(ui.widget()), (int)ui.night());
   if (input.begin()) Serial.printf("[boot] seesaw found at 0x50 on SDA=%d SCL=%d\n", input.sda(), input.scl());

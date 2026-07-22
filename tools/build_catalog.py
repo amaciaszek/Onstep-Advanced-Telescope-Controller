@@ -44,23 +44,67 @@ GALAXY_FAMILY = {"Galaxy"}
 GALAXY_GROUP  = {"Galaxy Pair", "Galaxy Triplet", "Group of Galaxies"}
 
 # ---------------------------------------------------------------- type enum
-# Must match ObjType in Catalog.h
-TYPE_MAP = {
-    "Galaxy":               0,
-    "Planetary Nebula":     1,
-    "Globular Cluster":     2,
-    "Nebula":               3,
-    "Emission Nebula":      3,
-    "Reflection Nebula":    3,
-    "HII Ionized region":   3,
-    "Dark Nebula":          3,
-    "Open Cluster":         4,
-    "Supernova Remnant":    5,
-    "Galaxy Pair":          6,
-    "Galaxy Triplet":       6,
-    "Group of Galaxies":    6,
-    "Star Cluster + Nebula": 7,
+# Must match ObjType in Catalog.h. These are the fine SUBTYPES.
+TYPE = {
+    "GAL_E": 0, "GAL_ES0": 1, "GAL_S0": 2, "GAL_S0A": 3, "GAL_SA": 4,
+    "GAL_SB": 5, "GAL_SAB": 6, "GAL_IRR": 7, "GAL_GENERIC": 8,
+    "GAL_PAIR": 9, "GAL_TRIPLET": 10, "GAL_GROUP": 11,
+    "EMISSION": 12, "HII": 13, "REFLECTION": 14, "DARK": 15,
+    "PLANETARY": 16, "REMNANT": 17, "CLUSTERNEB": 18, "GLOBULAR": 19,
+    "OPENCLUSTER": 20, "NEBULA": 21,
 }
+
+# Non-galaxy Object Type -> subtype. Galaxies are resolved separately from
+# the Classification column, since that is where the morphology lives.
+NONGAL_TYPE = {
+    "Planetary Nebula":      TYPE["PLANETARY"],
+    "Globular Cluster":      TYPE["GLOBULAR"],
+    "Open Cluster":          TYPE["OPENCLUSTER"],
+    "Supernova Remnant":     TYPE["REMNANT"],
+    "Star Cluster + Nebula": TYPE["CLUSTERNEB"],
+    "Emission Nebula":       TYPE["EMISSION"],
+    "HII Ionized region":    TYPE["HII"],
+    "Reflection Nebula":     TYPE["REFLECTION"],
+    "Dark Nebula":           TYPE["DARK"],
+    "Nebula":                TYPE["NEBULA"],
+}
+
+MULTI_GAL_TYPE = {
+    "Galaxy Pair":     TYPE["GAL_PAIR"],
+    "Galaxy Triplet":  TYPE["GAL_TRIPLET"],
+    "Group of Galaxies": TYPE["GAL_GROUP"],
+}
+
+
+def galaxy_subtype(classification):
+    """Map a TheSkyLive Classification string to a morphology subtype.
+
+    The reference art sheet defines eight galaxy morphologies; these are the
+    prefixes TheSkyLive actually uses. Order matters: 'Elliptical/Spiral'
+    must be tested before 'Elliptical', and the S0-Aa lenticular before the
+    plain S0.
+    """
+    c = classification.strip()
+    if not c:
+        return TYPE["GAL_GENERIC"]
+    if c.startswith("Elliptical/"):        return TYPE["GAL_ES0"]
+    if c.startswith("Elliptical"):         return TYPE["GAL_E"]
+    if c.startswith("Lenticular (S0-A"):   return TYPE["GAL_S0A"]
+    if c.startswith("Lenticular"):         return TYPE["GAL_S0"]
+    if c.startswith("Barred Spiral"):      return TYPE["GAL_SB"]
+    if c.startswith("Intermediate Spiral"): return TYPE["GAL_SAB"]
+    if c.startswith("Irregular"):          return TYPE["GAL_IRR"]
+    if c.startswith("Spiral"):             return TYPE["GAL_SA"]
+    return TYPE["GAL_GENERIC"]
+
+
+def resolve_type(objtype, classification):
+    """Full Object Type + Classification -> subtype, or None to drop."""
+    if objtype == "Galaxy":
+        return galaxy_subtype(classification)
+    if objtype in MULTI_GAL_TYPE:
+        return MULTI_GAL_TYPE[objtype]
+    return NONGAL_TYPE.get(objtype)
 
 # ------------------------------------------------------- constellation table
 IAU = {
@@ -146,7 +190,10 @@ def pack(rows, prof):
     kept = []
     for r in rows:
         t = r["Object Type"].strip()
-        if t in DROP_TYPES or t not in TYPE_MAP:
+        if t in DROP_TYPES:
+            continue
+        sub = resolve_type(t, r.get("Classification", ""))
+        if sub is None:
             continue
         size = fnum(r["Major Angular Size"])
         minor = fnum(r["Minor Angular Size"])
@@ -177,7 +224,7 @@ def pack(rows, prof):
         kept.append(dict(
             ra=ra, dec=dec, size=size or 0.0, minor=minor or size or 0.0,
             pa=fnum(r["Position Angle"]) or 0.0,
-            mag=mag, is_b=is_b, sb=sb, type=TYPE_MAP[t],
+            mag=mag, is_b=is_b, sb=sb, type=sub,
             con=IAU.get(r["Constellation"].strip(), "---"),
             desig=designation(r["Object Name"]),
             popular=popular_name(r["Com_Name"], designation(r["Object Name"]),
@@ -218,18 +265,18 @@ def pack(rows, prof):
             sb = 255
         else:
             sb = max(0, min(254, int(round((o["sb"] - SB_OFFSET) * 10.0))))
-        flags = o["type"] & 0x0F
+        flags = 0
         if o["is_b"]:
-            flags |= 0x10
+            flags |= 0x01
         if o["popular"]:
-            flags |= 0x20
-        recs.append((ra, dec, maj, mnr, pa, mag, sb, flags,
+            flags |= 0x02
+        recs.append((ra, dec, maj, mnr, pa, mag, sb, o["type"], flags,
                      o["con"], o["nameOff"]))
     return kept, recs, bytes(blob)
 
 
 def emit(profile, kept, recs, blob, path):
-    cons = sorted({r[8] for r in recs})
+    cons = sorted({r[9] for r in recs})   # con is field 9 in the record tuple
     cidx = {c: i for i, c in enumerate(cons)}
     lines = []
     A = lines.append
@@ -257,9 +304,9 @@ def emit(profile, kept, recs, blob, path):
     A('const uint16_t kNameBlobLen = %d;' % len(blob))
     A('')
     A('const Record kRecords[] = {')
-    for ra, dec, maj, mnr, pa, mag, sb, flags, con, off in recs:
-        A('    {%5d,%6d,%5d,%5d,%3d,%3d,%3d,%3d,%3d,%5d},'
-          % (ra, dec, maj, mnr, pa, mag, sb, flags, cidx[con], off))
+    for ra, dec, maj, mnr, pa, mag, sb, typ, flags, con, off in recs:
+        A('    {%5d,%6d,%5d,%5d,%3d,%3d,%3d,%3d,%3d,%3d,%5d},'
+          % (ra, dec, maj, mnr, pa, mag, sb, typ, flags, cidx[con], off))
     A('};')
     A('const uint16_t kRecordCount = %d;' % len(recs))
     A('')
@@ -270,14 +317,13 @@ def emit(profile, kept, recs, blob, path):
         f.write('\n'.join(lines) + '\n')
 
     by = collections.Counter()
-    names = {0: 'Galaxy', 1: 'Planetary', 2: 'Globular', 3: 'Nebula',
-             4: 'OpenCluster', 5: 'Remnant', 6: 'GalaxyGroup',
-             7: 'Cluster+Neb'}
+    names = {v: k for k, v in TYPE.items()}
     for o in kept:
         by[names[o['type']]] += 1
+    recbytes = len(recs) * 16
     print('[%s] %d objects, %d B records + %d B names = %.1f KB  -> %s'
-          % (profile, len(recs), len(recs) * 16, len(blob),
-             (len(recs) * 16 + len(blob)) / 1024.0, os.path.basename(path)))
+          % (profile, len(recs), recbytes, len(blob),
+             (recbytes + len(blob)) / 1024.0, os.path.basename(path)))
     for k, v in by.most_common():
         print('        %-14s %5d' % (k, v))
 
@@ -296,9 +342,10 @@ def main():
             w = csv.writer(f)
             w.writerow(['desig', 'popular', 'type', 'con', 'ra_h', 'dec_deg',
                         'size_arcmin', 'mag', 'magband', 'sb'])
+            tname = {v: k for k, v in TYPE.items()}
             for o in sorted(kept, key=lambda o: -(o['size'] or 0)):
-                w.writerow([o['desig'], o['popular'], o['type'], o['con'],
-                            round(o['ra'], 5), round(o['dec'], 4),
+                w.writerow([o['desig'], o['popular'], tname[o['type']],
+                            o['con'], round(o['ra'], 5), round(o['dec'], 4),
                             o['size'], o['mag'], 'B' if o['is_b'] else 'V',
                             o['sb']])
 

@@ -7,7 +7,7 @@ OnStep controller, in native LVGL, with full day and night-vision art sets.
 
 | File | Purpose |
 |---|---|
-| `Catalog.h/.cpp` | 16-byte packed records, sky-window filter, six sort orders |
+| `Catalog.h/.cpp` | 16-byte morphology records, sky-window filter, six sort orders |
 | `Catalog_long.cpp` / `Catalog_wide.cpp` | generated tables selected in `Settings.h` |
 | `Ephemeris.h/.cpp` | sun, moon, twilight regimes, rise/set search |
 | `SkyContext.h` | shared state + refresh cadence, no LVGL dependency |
@@ -44,7 +44,8 @@ python3 tools/gen_assets_v9.py
 python3 tools/png2c.py
 ```
 
-Total image data is now ~220 KB of flash.
+The generated art contains 88 type glyphs (22 types × day/night ×
+outline/filled), 16 moon phases, and day/night SKY navigation art.
 
 ## Navigation
 
@@ -86,17 +87,25 @@ the compass rose is the always-included region.
 
 ## Night mode
 
-Hue carries type identity in day mode. In night mode there is only red, so
-that information moves into **interior texture**:
+The catalog carries 22 fine object types while retaining the six simple
+filter groups. Galaxy records preserve elliptical, lenticular, spiral,
+barred, intermediate, irregular, generic, pair, triplet, and group forms.
+Nebula records distinguish emission, HII, reflection, dark, planetary,
+remnant, cluster+nebula, and generic forms; globular and open clusters retain
+their own types. The list and detail views use the fine glyph while the filter
+chips continue to use a representative group glyph.
 
-| Type | Texture |
+Hue carries type identity in day mode. In night mode there is only red, so
+that information moves into **silhouette and restrained interior texture**.
+
+| Family | Distinguishing structure |
 |---|---|
-| Galaxy | smooth solid ellipse |
-| Planetary | annulus, hollow centre |
-| Globular | dense stipple |
-| Nebula | diagonal hatch |
-| Open cluster | discrete points |
-| Remnant | torn open arc |
+| Elliptical/lenticular | smooth oval, lens, spindle, or dust lane |
+| Spiral | open arms, long bar, or short intermediate bar |
+| Multiple galaxies | two, three, or five separate galaxy bodies |
+| Nebulae | cloud filaments, HII knots, illuminating star, or dark lane |
+| Planetary/remnant | concentric annulus or broken shell |
+| Clusters | centrally condensed grains or sparse discrete stars |
 
 Two other night-specific substitutions, following the existing `nightRule`
 convention that OUTLINE = inactive and FILLED = active:
@@ -133,14 +142,12 @@ build with the command in its header comment):
 * timing: full 4,271-object rebuild + sort 0.27 ms, `computeSky` 0.22 ms
   on desktop
 
-**Not verified** — I had no LVGL or Arduino toolchain available:
+**Firmware verification and remaining hardware checks:**
 
-* none of `ScreenSky.cpp`, `ScreenCatalog.cpp`, `ScreenModule.cpp` or the
-  `LvglDashboard` integration has been compiled. Expect to fix compile
-  errors on first build.
-* every `ui_img_*` symbol referenced by the new code was checked to exist
-  in `UiAssets.h` (82 referenced, 0 missing), but that is a symbol check,
-  not a compile.
+* The complete integration now compiles for `lilygo_t_display_s3` using
+  ESP32 core 2.0.14 and LVGL 8.3.11, including the 22-type catalog and GoTo.
+* Every referenced `ui_img_*` symbol is generated and linked; the final
+  appearance still needs checking on the physical 320x170 display.
 * LVGL 8.3 API usage — particularly `lv_arc` angle conventions and
   `lv_line` point lifetimes — is written from the documented behaviour and
   should be sanity-checked on hardware. `fovPts_` is a member array

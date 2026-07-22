@@ -14,32 +14,60 @@
 // =====================================================================
 namespace catalog {
 
+// Fine-grained object type -- this is the SUBTYPE, and it drives which glyph
+// is drawn. It carries the galaxy morphology from the TheSkyLive
+// Classification column so an elliptical does not look like a barred spiral.
+//
+// Values are stable and generated code depends on them; append new ones at
+// the end rather than renumbering. gen_assets_v9.py and the glyph table both
+// index by this.
 enum ObjType : uint8_t {
-    TYPE_GALAXY      = 0,
-    TYPE_PLANETARY   = 1,
-    TYPE_GLOBULAR    = 2,
-    TYPE_NEBULA      = 3,
-    TYPE_OPENCLUSTER = 4,
-    TYPE_REMNANT     = 5,
-    TYPE_GALGROUP    = 6,
-    TYPE_CLUSTERNEB  = 7,
-    TYPE_COUNT       = 8
+    // galaxies, by morphology (matches the reference art sheet)
+    TYPE_GAL_E       = 0,    // elliptical
+    TYPE_GAL_ES0     = 1,    // elliptical / lenticular transition
+    TYPE_GAL_S0      = 2,    // lenticular
+    TYPE_GAL_S0A     = 3,    // lenticular S0-Aa
+    TYPE_GAL_SA      = 4,    // unbarred spiral
+    TYPE_GAL_SB      = 5,    // barred spiral
+    TYPE_GAL_SAB     = 6,    // intermediate spiral
+    TYPE_GAL_IRR     = 7,    // irregular
+    TYPE_GAL_GENERIC = 8,    // galaxy, morphology unknown/blank
+    // multi-galaxy systems
+    TYPE_GAL_PAIR    = 9,
+    TYPE_GAL_TRIPLET = 10,
+    TYPE_GAL_GROUP   = 11,
+    // everything else
+    TYPE_EMISSION    = 12,   // emission nebula
+    TYPE_HII         = 13,   // HII ionized region
+    TYPE_REFLECTION  = 14,   // reflection nebula
+    TYPE_DARK        = 15,   // dark nebula
+    TYPE_PLANETARY   = 16,
+    TYPE_REMNANT     = 17,   // supernova remnant
+    TYPE_CLUSTERNEB  = 18,   // star cluster + nebula
+    TYPE_GLOBULAR    = 19,
+    TYPE_OPENCLUSTER = 20,
+    TYPE_NEBULA      = 21,   // generic / unclassified nebula
+    TYPE_COUNT       = 22
 };
 
-// Filter chips presented in the UI. Several map to more than one ObjType.
+// Filter chips presented in the UI. Several subtypes map to one group; the
+// filter and the six top-level chips work at this coarser level, while the
+// glyphs and the detail screen use the fine ObjType above.
 enum TypeGroup : uint8_t {
-    GRP_GALAXY    = 0,   // TYPE_GALAXY | TYPE_GALGROUP
+    GRP_GALAXY    = 0,   // all TYPE_GAL_*
     GRP_PLANETARY = 1,
     GRP_GLOBULAR  = 2,
-    GRP_NEBULA    = 3,
-    GRP_CLUSTER   = 4,   // TYPE_OPENCLUSTER | TYPE_CLUSTERNEB
+    GRP_NEBULA    = 3,   // emission/HII/reflection/dark/generic + cluster+neb
+    GRP_CLUSTER   = 4,   // open clusters
     GRP_REMNANT   = 5,
     GRP_COUNT     = 6
 };
 
-static constexpr uint8_t FLAG_TYPE_MASK = 0x0F;
-static constexpr uint8_t FLAG_MAG_IS_B  = 0x10;  // magnitude is B, not V
-static constexpr uint8_t FLAG_HAS_NAME  = 0x20;  // popular name follows desig
+// One outline+filled glyph pair per ObjType. gen_assets_v9.py emits these.
+static constexpr uint8_t GLYPH_COUNT = TYPE_COUNT;
+
+static constexpr uint8_t FLAG_MAG_IS_B  = 0x01;  // magnitude is B, not V
+static constexpr uint8_t FLAG_HAS_NAME  = 0x02;  // popular name follows desig
 
 static constexpr uint8_t MAG_NONE = 255;
 static constexpr uint8_t SB_NONE  = 255;
@@ -52,10 +80,12 @@ struct Record {
     uint8_t  pa;        // position angle / 2  (0..179 -> 0..358 deg)
     uint8_t  mag;       // (mag + 3.0) * 10, 255 = unknown
     uint8_t  sb;        // (sb - 15.0) * 10, 255 = unknown (galaxies only)
-    uint8_t  flags;     // type + FLAG_*
+    uint8_t  type;      // ObjType (subtype). Group is derived from it.
+    uint8_t  flags;     // FLAG_MAG_IS_B | FLAG_HAS_NAME
     uint8_t  con;       // index into kConstNames
     uint16_t nameOff;   // byte offset into kNameBlob
-};
+};                      // 16 bytes: subtype consumes the former alignment pad
+static_assert(sizeof(Record) == 16, "Catalog Record layout changed");
 
 // ---- generated tables ----------------------------------------------------
 extern const Record   kRecords[];
@@ -67,7 +97,7 @@ extern const uint8_t  kConstCount;
 
 // ---- unpacking -----------------------------------------------------------
 inline ObjType typeOf(const Record& r) {
-    return static_cast<ObjType>(r.flags & FLAG_TYPE_MASK);
+    return static_cast<ObjType>(r.type);
 }
 inline TypeGroup groupOf(const Record& r);
 inline double raHours(const Record& r)  { return r.ra * (24.0 / 65535.0); }
@@ -80,26 +110,28 @@ inline double magnitude(const Record& r){ return r.mag * 0.1 - 3.0; }
 inline bool   magIsBlue(const Record& r){ return (r.flags & FLAG_MAG_IS_B) != 0; }
 inline bool   hasSB(const Record& r)    { return r.sb != SB_NONE; }
 inline double surfBright(const Record& r){ return r.sb * 0.1 + 15.0; }
+inline bool   isGalaxy(ObjType t) { return t <= TYPE_GAL_GROUP; }
 
 const char* designation(const Record& r);   // always present
 const char* popularName(const Record& r);   // "" when FLAG_HAS_NAME is clear
 const char* constellation(const Record& r);
-const char* typeName(ObjType t);
+const char* typeName(ObjType t);            // full label, e.g. "BARRED SPIRAL"
 const char* typeShort(ObjType t);           // 3-4 char list-column label
 const char* groupName(TypeGroup g);
 
-inline TypeGroup groupOf(const Record& r) {
-    switch (typeOf(r)) {
-        case TYPE_GALAXY:
-        case TYPE_GALGROUP:    return GRP_GALAXY;
-        case TYPE_PLANETARY:   return GRP_PLANETARY;
-        case TYPE_GLOBULAR:    return GRP_GLOBULAR;
-        case TYPE_NEBULA:      return GRP_NEBULA;
-        case TYPE_OPENCLUSTER:
-        case TYPE_CLUSTERNEB:  return GRP_CLUSTER;
-        default:               return GRP_REMNANT;
+// Which of the 6 filter chips a subtype belongs to.
+inline TypeGroup groupOfType(ObjType t) {
+    if (t <= TYPE_GAL_GROUP)      return GRP_GALAXY;
+    switch (t) {
+        case TYPE_PLANETARY:      return GRP_PLANETARY;
+        case TYPE_GLOBULAR:       return GRP_GLOBULAR;
+        case TYPE_OPENCLUSTER:    return GRP_CLUSTER;
+        case TYPE_REMNANT:        return GRP_REMNANT;
+        default:                  return GRP_NEBULA;  // emission/HII/refl/dark/
+                                                      // cluster+neb/generic
     }
 }
+inline TypeGroup groupOf(const Record& r) { return groupOfType(typeOf(r)); }
 
 // =====================================================================
 //  Filter model

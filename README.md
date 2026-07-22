@@ -54,6 +54,8 @@ Libraries: `TFT_eSPI`, `Adafruit_seesaw`. Enable **PSRAM** in the board config.
   change a value.
 - Catalog detail uses a two-press GoTo confirmation, then sends classic
   OnStep `:Sr`, `:Sd`, and `:MS`. GoTo is rejected while offline or parked.
+- Catalog rows now preserve 22 object subtypes, including galaxy morphology
+  and separate nebula classes, with matching day and red night-mode glyphs.
 - A short SELECT opens SETTINGS directly; in SETTINGS it activates the selected
   row. Hold SELECT for at least 600 ms for the emergency stop command.
 - Choose **WI-FI / ONSTEP SETUP** and press A to use the on-device keyboard.
