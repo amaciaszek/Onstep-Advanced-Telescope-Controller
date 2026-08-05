@@ -9,7 +9,7 @@ Elecrow's own vendor display and touch libraries.
 ```
 OnStep_Elecrow_LVGL/
   OnStep_Elecrow_LVGL.ino     the application
-  assets/
+  assets/c:\Users\Owner\Documents\GitHub\AdamMacInfo\Onstep-Advanced-Telescope-Controller\OnStep_Elecrow_LVGL\OnStep_Elecrow_LVGL.ino
     onstep_assets.h           umbrella header — include this, get everything
     onstep_theme.{c,h}        day + night palettes, pre-snapped to RGB565
     onstep_{label,body,strong,value,head,hero}.c    Inter, 6 roles, 4bpp

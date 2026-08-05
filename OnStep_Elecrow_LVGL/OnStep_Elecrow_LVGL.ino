@@ -49,6 +49,7 @@
 #include "esp_heap_caps.h"
 #include "ST77922.h"
 #include "ST77922_Touch.h"
+#include "ScreenId.h"
 #include "assets/onstep_assets.h"
 
 // ---------------------------------------------------------------- config
@@ -162,7 +163,6 @@ static void lvgl_touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 }
 
 // ---------------------------------------------------------------- screens
-enum ScreenId { SCR_HOME = 0, SCR_SKY, SCR_CATALOG, SCR_SETTINGS, SCR_COUNT };
 static lv_obj_t *g_screen[SCR_COUNT];
 static ScreenId  g_current = SCR_HOME;
 static lv_obj_t *g_tabBtn[SCR_COUNT];
