@@ -53,7 +53,6 @@
 
 // ---------------------------------------------------------------- config
 #define PANEL_ROTATION        0      // 0 = portrait 320x480 (see note above)
-#define LVGL_PARTIAL_REFRESH  1      // requires rotation 0
 #define SCR_W  320
 #define SCR_H  480
 
@@ -141,18 +140,13 @@ static void horizonFromEq(double raH, double decD, double lstH, double latD,
 static lv_disp_draw_buf_t lv_draw_buf;
 static lv_disp_drv_t      lv_disp_drv;
 static lv_color_t        *lv_buf_1 = nullptr;
-static lv_color_t        *lv_buf_2 = nullptr;
 static uint32_t           lv_last_tick = 0;
 
 static void lvgl_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px) {
-#if LVGL_PARTIAL_REFRESH
-  const uint16_t w = area->x2 - area->x1 + 1;
-  const uint16_t h = area->y2 - area->y1 + 1;
-  mylcd.Fill_Colors(area->x1, area->y1, w, h, (uint16_t *)px);
-#else
+  // The vendor rotation-aware driver expects a complete frame, exactly as in
+  // Elecrow's official LVGL/touch demo. full_refresh below guarantees that.
   (void)area;
   mylcd.Fill_Colors(0, 0, mylcd.Get_Width(), mylcd.Get_Height(), (uint16_t *)px);
-#endif
   lv_disp_flush_ready(drv);
 }
 
@@ -603,8 +597,8 @@ static void buildSettings() {
   mkRule(s, 192, C_RULE_FAINT);
 
   char buf[64];
-  snprintf(buf, sizeof(buf), "Rotation %d  ·  partial refresh %s",
-           PANEL_ROTATION, LVGL_PARTIAL_REFRESH ? "on" : "off");
+  snprintf(buf, sizeof(buf), "Rotation %d  ·  vendor full refresh",
+           PANEL_ROTATION);
   lv_obj_t *l3 = mkLabel(s, buf, C_TEXT_MID, &onstep_label);
   lv_obj_set_pos(l3, 12, 206);
   snprintf(buf, sizeof(buf), "PSRAM free  %u KB", (unsigned)(ESP.getFreePsram() / 1024));
@@ -653,29 +647,18 @@ void setup() {
 
   lv_init();
 
-#if LVGL_PARTIAL_REFRESH
-  // Two 1/8-screen buffers. LVGL renders into one while the other is on the
-  // wire, and only invalidated regions are ever drawn or pushed.
-  const uint32_t bufPx = (uint32_t)SCR_W * SCR_H / 8;
-  lv_buf_1 = (lv_color_t *)heap_caps_malloc(bufPx * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-  lv_buf_2 = (lv_color_t *)heap_caps_malloc(bufPx * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-  if (!lv_buf_1 || !lv_buf_2) { Serial.println("ERR: LVGL buffers"); while (1) delay(1000); }
-  lv_disp_draw_buf_init(&lv_draw_buf, lv_buf_1, lv_buf_2, bufPx);
-#else
+  // Same full-frame allocation as the supplied vendor LVGL/touch demo.
   const uint32_t bufPx = (uint32_t)mylcd.Get_Width() * mylcd.Get_Height();
   lv_buf_1 = (lv_color_t *)heap_caps_malloc(bufPx * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
   if (!lv_buf_1) { Serial.println("ERR: LVGL buffer"); while (1) delay(1000); }
   lv_disp_draw_buf_init(&lv_draw_buf, lv_buf_1, nullptr, bufPx);
-#endif
 
   lv_disp_drv_init(&lv_disp_drv);
   lv_disp_drv.hor_res  = mylcd.Get_Width();
   lv_disp_drv.ver_res  = mylcd.Get_Height();
   lv_disp_drv.flush_cb = lvgl_flush;
   lv_disp_drv.draw_buf = &lv_draw_buf;
-#if !LVGL_PARTIAL_REFRESH
   lv_disp_drv.full_refresh = 1;
-#endif
   lv_disp_drv_register(&lv_disp_drv);
 
   static lv_indev_drv_t indev_drv;

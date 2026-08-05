@@ -46,6 +46,17 @@ These are not optional.
 
 Arduino-ESP32 **3.x**.
 
+## Current verified hardware baseline
+
+The current application intentionally follows Elecrow's supplied LVGL/touch
+demo without wrapper libraries: `ST77922`, `ST77922_TOUCH`, one full PSRAM
+frame buffer, `mylcd.Fill_Colors()` in the LVGL flush callback, and
+`my_touch.Get_Touch()` in the input callback. `full_refresh = 1` is enabled.
+
+Open `OnStep_Elecrow_LVGL/OnStep_Elecrow_LVGL.ino`; do not use old sketches
+that include `Elecrow35Display.h` or `Elecrow35Touch.h`, because those files
+are not vendor libraries and are not part of this project.
+
 ## Two deliberate departures from the vendor demo
 
 **Rotation 0 (portrait), not 1 (landscape).** In the vendor library's

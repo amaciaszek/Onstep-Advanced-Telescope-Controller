@@ -49,7 +49,8 @@ then push the whole sprite with `Fill_Colors(0, 0, w, h, sprite.getPointer())`.
 
 `FramebufferDisplay` already *is* that sprite. So TFT_eSPI drops out of the build
 entirely — you keep your own renderer and your own dirty-tile logic, and
-`Elecrow35Display` supplies only transport.
+The application uses the vendor `ST77922` display driver directly as shown in
+Elecrow's LVGL demo; there is no `Elecrow35Display` wrapper to install.
 
 **Do not use rotation 1 or 3.** The vendor's `Fill_Colors` handles those with a
 `ps_malloc` and a per-pixel transpose *on every call*. Rotation 0 is native
@@ -64,9 +65,9 @@ portrait 320×480 with MADCTL = 0, which is what you want anyway.
 | Official IO allocation table | touch **RESET** | touch **INTERRUPT** |
 | Working vendor driver | touch **INT** | touch **RESET** |
 
-The driver wins (it demonstrably runs), and that is what `Elecrow35Touch.h`
-uses. If touch fails to initialise, swapping these two constants is the first
-thing to try. Flagged in the header.
+The driver wins (it demonstrably runs). Touch uses the vendor
+`ST77922_TOUCH` library. If touch fails to initialise, verify the vendor
+library version before changing its pin definitions.
 
 Neither pin is in GPIO0–21, so **neither is RTC-capable — touch cannot wake the
 device from deep sleep.** That has to remain a physical button.
