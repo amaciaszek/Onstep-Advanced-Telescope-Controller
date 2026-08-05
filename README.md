@@ -1,105 +1,128 @@
-# platform_esp32 — LilyGO T-Display-S3 firmware
+# OnStep Advanced Telescope Controller — Elecrow 3.5″ (LVGL)
 
-For physical controls, screen-by-screen instructions, GoTo safety, Wi-Fi setup,
-and 320×170 visual references, see [`USER_GUIDE.md`](USER_GUIDE.md).
+Portrait 320×480 telescope controller for an OnStep-driven mount, running on the
+Elecrow 3.5″ ESP32-S3 (ES3C35P). Touch-driven, LVGL 8.x, built directly on
+Elecrow's own vendor display and touch libraries.
 
-This is the hardware backend. It plugs your **proven OnStep networking** and the
-**tested `onstep::` protocol decoder** into the *same* `shared/` App/UI that the
-desktop simulator runs. Nothing in `shared/` changes between sim and hardware.
+## Layout
 
-## What maps to what
+```
+OnStep_Elecrow_LVGL/
+  OnStep_Elecrow_LVGL.ino     the application
+  assets/
+    onstep_assets.h           umbrella header — include this, get everything
+    onstep_theme.{c,h}        day + night palettes, pre-snapped to RGB565
+    onstep_{label,body,strong,value,head,hero}.c    Inter, 6 roles, 4bpp
+    dso_icons_{24,48}.{c,h}   23 DSO type icons, LV_IMG_CF_ALPHA_4BIT
+    ui_glyphs_{16,24}.{c,h}   35 UI glyphs, same format
+sdcard/                       copy the CONTENTS of this to the microSD root
+  sky/   mw_*.bin star_*.bin *.pal const_512.bin figures.bin
+  moon/  moon_256.bin moon_512.bin
+tools/                        regenerate any of the above
+```
 
-| Shared interface | ESP32 backend | Source |
-|---|---|---|
-| `Display` | `TDisplayS3Display` | TFT_eSPI + RGB565 dirty-tile present() |
-| `Input` | `InputSeesaw` | Adafruit I2C gamepad |
-| `StatusSource` | `OnStepStatusSource` | polls `:GU# :GR# :GD# :GA# :GZ# :D#`, decodes |
-| `CommandSink` | `OnStepCommandSink` | `:Me# :Qe# :Q# :R# :hP# :hR# :hC#` |
-| `GuideController` | `NullGuideController` | no PHD2 in the direct setup (yet) |
-| `DeviceInfo` | `HandheldDeviceInfo` | `WiFi.RSSI()` bars + battery ADC |
+## Dependencies
 
-`OnStepClient` is a near-verbatim wrap of the diagnostic sketch's
-`sendCommand()` — connect-per-command, three reply kinds. Behavior on the wire
-is unchanged from what already works.
+Install from Elecrow's official resource pack (`1-Demo/Arduino/Install libraries/`):
 
-## The two design decisions baked in
+- **ST77922** — display driver
+- **ST77922_TOUCH** — touch driver
+- **lvgl** 8.x
 
-**Status decode fidelity.** All the observed rules live in `shared/OnStepProtocol.cpp`
-and are unit-tested (`tests/smoke.cpp`) against your real strings:
-- park is `P` only — `H` (at home) during `I` reads as *parking*, not parked;
-- motion combines `:D#` (0x7F) with `GU` `g`/`I`/`h`/`G`; `:D#` alone is never
-  treated as motion, and a manual jog is detected from `g`;
-- RA/DEC/ALT/AZ parsed tolerantly (`:` or `*` separators, optional sign).
+Nothing else. No TFT_eSPI: the vendor demos use it only as a software renderer
+into a PSRAM sprite, and LVGL fills that role here.
 
-**Responsiveness.** Networking blocks, so `OnStepStatusSource::update()` issues
-**one query per tick** and cycles the set; `App::update()` handles input *before*
-that query, so button/stick latency is ~one query, not a full refresh. During an
-active jog the poller drops to `:GU#`+`:D#` only (`setSlewing(true)`), called from
-`loop()`.
+## Arduino IDE settings
 
-## Build (Arduino IDE or PlatformIO, ESP32-S3)
+These are not optional.
 
-Libraries: `TFT_eSPI`, `Adafruit_seesaw`. Enable **PSRAM** in the board config.
+| Setting | Value |
+|---|---|
+| Board | ESP32S3 Dev Module |
+| **USB CDC On Boot** | **Enabled** — else `Serial` prints nothing over USB-C |
+| Flash Size | 16MB (128Mb) |
+| **PSRAM** | **OPI PSRAM** — the LVGL buffers and dome canvas need it |
+| Partition Scheme | 16M Flash (3MB APP / 9.9MB FATFS) |
 
-## Controller and network setup
+Arduino-ESP32 **3.x**.
 
-- The gamepad is probed at address `0x50` on SDA/SCL `44/43`, then `8/9`.
-  Define `ONSTEP_I2C_SDA` and `ONSTEP_I2C_SCL` before including
-  `InputSeesaw.h` if your wiring uses another pair. The selected pins are
-  printed at boot.
-- Enclosure button 1 (BOOT/GPIO0) acts as A/change. A short press of button 2
-  (GPIO14) advances screens; hold it for at least 600 ms to shut the display,
-  Wi-Fi, and ESP32 down into deep sleep. Press GPIO14 again or press RESET to
-  wake/restart. Deep sleep is very low power, but only a physical battery
-  switch can provide a true zero-current disconnect.
-- START cycles HOME, SKY, CATALOG, SETTINGS, and DIAGNOSTICS even when Wi-Fi
-  or OnStep is offline. On SETTINGS, move the stick up/down and press A to
-  change a value.
-- Catalog detail uses a two-press GoTo confirmation, then sends classic
-  OnStep `:Sr`, `:Sd`, and `:MS`. GoTo is rejected while offline or parked.
-- Catalog rows now preserve 22 object subtypes, including galaxy morphology
-  and separate nebula classes, with matching day and red night-mode glyphs.
-- A short SELECT opens SETTINGS directly; in SETTINGS it activates the selected
-  row. Hold SELECT for at least 600 ms for the emergency stop command.
-- Choose **WI-FI / ONSTEP SETUP** and press A to use the on-device keyboard.
-  The CASE key cycles lowercase, uppercase, and number/symbol layouts. Enter
-  the Wi-Fi name, choose NEXT, enter the password, then choose ENTER. EXIT
-  returns without changing the saved network. Credentials are stored in ESP32
-  NVS and survive power-off. The temporary `OnStep-Remote-Setup` web page is
-  still available automatically on a completely unconfigured first boot.
-- Wi-Fi setup first shows three OnStep mount profiles. Move the stick to view
-  them, press A to create/edit one, or press SELECT to activate a configured
-  profile. The password is shown while editing because this is a local
-  handheld setup screen. Most users can simply use Profile 1.
-- A quick joystick flick moves one keyboard character. Holding it for 450 ms
-  starts a controlled repeat every 150 ms.
-- BRIGHTNESS cycles through 5%, 10%, 15%, 20%, 25%, 35%, and 50%. It defaults
-  to 25%, is capped at 50%, and is saved in NVS.
-- TEMPERATURE defaults to hidden. It is the ESP32 chip temperature, not the
-  outdoor air or telescope temperature, and can be shown again from Settings.
-- PULSE GRAPH is designed for classic OnStep. Blue is signed RA-coordinate
-  change and green is signed Dec-coordinate change while `:GU#` reports an
-  active guide pulse. `RA+`, `RA-`, `DE+`, and `DE-` show the inferred motion
-  direction. It deliberately does not claim RMS guide error, because that
-  information lives in the PC guider and is not reported by classic OnStep.
+## Two deliberate departures from the vendor demo
 
-Add all of `shared/*.cpp/.h` and `platform_esp32/*.h` plus
-`TDisplayS3Display.cpp` to the sketch. TFT_eSPI must be configured for the board
-(commonly `Setup206_LilyGo_T_Display_S3`).
+**Rotation 0 (portrait), not 1 (landscape).** In the vendor library's
+`Fill_Colors()`, rotations 1 and 3 do a `ps_malloc` of the whole frame, a
+per-pixel transpose, and a `free` — on *every call*. That is ~300 KB of heap
+churn and 5–8 ms of copying per frame before anything reaches the wire.
+Rotation 0 assigns `tx_buf = color` and pushes directly.
 
-`OnStepRemote.ino` is the entry point. It sets `Mode::Standalone` (direct to the
-mount, no guider). When you later add a laptop for imaging, swap
-`OnStepStatusSource` for a NINA-based `StatusSource` and set `Mode::Imaging` — the
-UI is unchanged.
+**Partial refresh, not `full_refresh = 1`.** The whole-frame restriction belongs
+to the *rotated* path only. At rotation 0, `Fill_Colors(sx, sy, w, h, buf)`
+takes a contiguous `w*h` buffer and windows it — exactly the shape LVGL's
+partial flush provides. Full screen is 30.7 ms on the wire at 80 MHz; a single
+catalog row is 1.8 ms.
 
-## Before you fly it — verify these on the bench
+The two are linked: rotation 0 is what makes partial refresh possible at all.
 
-- **`setHome` is intentionally a guarded no-op.** Setting home/park is
-  destructive and firmware-specific; confirm the OnStepX 10.25i code, then wire it
-  in `OnStepCommandSink::setHome()`. The UI already long-press-gates it.
-- **`goHome` uses `:hC#`** (move to home). Confirm that matches your intent vs.
-  reset-home.
-- **Rate mapping** sends `:R1#..:R9#`. Your diagnostic used `:RC#` (centering) and
-  `:R0..9#` presets — adjust `onstep::rateCmd()` if you prefer named rates.
-- **Stop on release** sends the axis-specific `:Qn#/:Qs#/:Qe#/:Qw#`; e-stop sends
-  `:Q#` (aborts goto/park too).
+To go landscape anyway: set `PANEL_ROTATION 1`, `LVGL_PARTIAL_REFRESH 0`, and
+swap `SCR_W`/`SCR_H`. It works; you pay the transpose every frame.
+
+## Assets
+
+**Fonts** are Inter, instantiated per role with the optical-size axis pinned,
+and with `tnum` + `zero` baked into the cmap. Inter's default figures are
+*proportional* — digit `1` is 833 units against `0` at 1292 — which would make
+a live RA/Dec readout shuffle sideways every second. Verified after LVGL
+conversion: all ten digits are 351 units in Hero.
+
+**Icons and glyphs** are 4-bit alpha. That is already exactly
+`LV_IMG_CF_ALPHA_4BIT`, so the conversion is a relabelling with no resampling.
+LVGL tints them from `img_recolor` at draw time, which is why one asset serves
+both the day and night palettes.
+
+**Colours** are pre-snapped to the RGB565 grid. Changing a red or blue channel
+by less than 8, or green by less than 4, changes nothing on glass. Minimum
+pairwise separation after quantisation is 22.6 in both palettes — the first
+pass failed this, with `Surface2` and `RuleFaint` collapsing to the same code.
+
+**Flash cost:** ~47 KB icons + glyphs, ~120 KB fonts.
+
+## SD card
+
+Copy the contents of `sdcard/` to the card root. 1.6 MB total.
+
+`figures.bin` holds 742 constellation polylines / 1445 segments in 14.3 KB,
+traced from the NASA raster by skeletonisation (99.93% / 98.46% agreement both
+ways). Note the artwork's lines are **not** great circles — assuming geodesics
+silently drops about a fifth of them.
+
+Sky textures are 512×256, which is the matched size for a 208 px dome
+(0.70°/texel against 0.87°/px). 1024 is 2.5× oversampled and nearest-neighbour
+sampling of an oversampled texture aliases *worse*.
+
+## Not yet wired
+
+The sketch runs standalone on mock data. To finish it:
+
+1. **`OnStepClient`** — replace `g_mount` mock updates. Put the poll on a
+   FreeRTOS task pinned to **core 0** so a blocking socket never stalls the
+   renderer: `xTaskCreatePinnedToCore(pollerTask, "poll", 6144, nullptr, 4, nullptr, 0)`.
+2. **Sky texture** — load `sky/mw_512.bin` + palette into PSRAM and replace the
+   procedural star field in `drawDome()`. The projection around it is already
+   correct, so only the inner loop changes.
+3. **Static screen→(HA,Dec) LUT** — alt/az depends only on hour angle,
+   declination and latitude, none of which change during a night. Time enters
+   only as `H = LST − RA`, so the mapping is constant and advancing time is one
+   integer offset. ~3 ms per dome, no runtime trigonometry.
+4. **DSO imagery** — three tiers as raw RGB565 in fixed-size records, so the
+   offset of object N is `N × record_size`.
+
+## Regenerating
+
+```
+python tools/01_fonts.py         # Inter -> per-role TTFs, tabular baked in
+python tools/02_theme.py         # palettes, with RGB565 collision checks
+python tools/03_dso_icons.py     # 23 icons, verified pairwise-distinct
+python tools/04_ui_glyphs.py     # 35 glyphs
+python tools/05_moon.py          # albedo + Lommel-Seeliger renderer
+python tools/13_lvgl_assets.py   # -> LVGL C descriptors
+npm i -g lv_font_conv            # then see tools/make_fonts.sh
+```
