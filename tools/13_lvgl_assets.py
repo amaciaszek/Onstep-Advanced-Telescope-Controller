@@ -30,8 +30,12 @@ def emit(src, names, size, prefix, outfile):
     for i,n in enumerate(names):
         blob = data[i*per:(i+1)*per]
         sym = f'{prefix}_{n}_{size}'
-        body = ','.join(f'0x{b:02x}' for b in blob)
-        wrapped='\n'.join('  '+body[j:j+96] for j in range(0,len(body),96))
+        # Wrap between complete byte tokens. Splitting the rendered text at an
+        # arbitrary character count can turn `0x00` into `0` + `x00` on the
+        # next line, producing invalid C source.
+        tokens = [f'0x{b:02x}' for b in blob]
+        wrapped='\n'.join('  '+','.join(tokens[j:j+16])+','
+                          for j in range(0, len(tokens), 16))
         lines += [f'static const uint8_t {sym}_map[] = {{',wrapped,'};','',
           f'const lv_img_dsc_t {sym} = {{',
           '  .header.cf = LV_IMG_CF_ALPHA_4BIT,',

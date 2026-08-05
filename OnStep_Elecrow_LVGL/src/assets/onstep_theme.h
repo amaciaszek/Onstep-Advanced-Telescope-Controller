@@ -15,9 +15,17 @@ typedef struct {
   lv_color_t accent, accentDim, warn, alert;
 } onstep_palette_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern const onstep_palette_t onstep_day;
 extern const onstep_palette_t onstep_night;
 
 // Night mode is a palette swap on the same layout, not a second design.
 extern const onstep_palette_t *onstep_pal;
 void onstep_set_night(bool on);
+
+#ifdef __cplusplus
+}
+#endif
