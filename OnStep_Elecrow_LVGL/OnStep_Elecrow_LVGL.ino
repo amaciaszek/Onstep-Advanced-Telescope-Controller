@@ -50,7 +50,7 @@
 #include "ST77922.h"
 #include "ST77922_Touch.h"
 #include "ScreenId.h"
-#include "assets/onstep_assets.h"
+#include "src/assets/onstep_assets.h"
 
 // ---------------------------------------------------------------- config
 #define PANEL_ROTATION        0      // 0 = portrait 320x480 (see note above)
